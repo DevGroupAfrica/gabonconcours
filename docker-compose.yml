@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0
+    ports:
+      - "3307:3306"  # 3307 sur ton PC → 3306 dans le conteneur
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: gabconcoursv5
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ""
+
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    environment:
+      DB_HOST: db
+      DB_USER: user
+      DB_PASSWORD: 
+      DB_NAME: gabconcours
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

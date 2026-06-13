@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.552.0",
+    "recharts": "^3.3.0",
+    "xlsx": "^0.18.5"
+  }
+}
