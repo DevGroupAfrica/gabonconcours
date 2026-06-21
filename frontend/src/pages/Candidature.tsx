@@ -535,7 +535,7 @@ import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Alert, AlertDescription} from '@/components/ui/alert';
-import {AlertTriangle, Camera, Upload, X} from 'lucide-react';
+import {AlertTriangle, Camera, Search, Upload, X} from 'lucide-react';
 import {toast} from '@/hooks/use-toast';
 import Layout from '@/components/Layout';
 import {apiService} from '@/services/api';
@@ -563,6 +563,11 @@ const Candidature = () => {
     const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [ageError, setAgeError] = useState<string | null>(null);
+    const [nipcanSearch, setNipcanSearch] = useState('');
+    const [nipcanLoading, setNipcanLoading] = useState(false);
+    const [loadedNipcan, setLoadedNipcan] = useState('');
+
+    const normalizeValue = (value: unknown) => value === null || value === undefined ? '' : String(value);
 
     // Fonction pour calculer l'âge
     const calculateAge = (birthDate: string): number => {
@@ -682,6 +687,60 @@ const Candidature = () => {
         });
     };
 
+    const handleLoadByNipcan = async () => {
+        const cleanNipcan = nipcanSearch.trim();
+
+        if (!cleanNipcan) {
+            toast({
+                title: "NIPCAN requis",
+                description: "Saisissez votre NIPCAN pour récupérer vos informations.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setNipcanLoading(true);
+        try {
+            const response = await apiService.getCandidatByNipcan<any>(cleanNipcan);
+
+            if (!response.success || !response.data) {
+                throw new Error(response.message || "Aucun candidat trouvé avec ce NIPCAN");
+            }
+
+            const candidatData = response.data;
+            setCandidatForm(prev => ({
+                ...prev,
+                nomcan: normalizeValue(candidatData.nomcan),
+                prncan: normalizeValue(candidatData.prncan),
+                dtncan: normalizeValue(candidatData.dtncan).slice(0, 10),
+                ldncan: normalizeValue(candidatData.ldncan),
+                telcan: normalizeValue(candidatData.telcan),
+                maican: normalizeValue(candidatData.maican),
+                proorg: normalizeValue(candidatData.proorg),
+                proact: normalizeValue(candidatData.proact),
+                proaff: normalizeValue(candidatData.proaff),
+            }));
+
+            const resolvedNipcan = normalizeValue(candidatData.nipcan || cleanNipcan);
+            localStorage.setItem('candidat_nipcan', resolvedNipcan);
+            setLoadedNipcan(resolvedNipcan);
+            validateAge(normalizeValue(candidatData.dtncan).slice(0, 10));
+
+            toast({
+                title: "Informations récupérées",
+                description: "Les données du candidat ont été préremplies.",
+            });
+        } catch (error: any) {
+            toast({
+                title: "Candidat introuvable",
+                description: error.message || "Impossible de récupérer les données avec ce NIPCAN.",
+                variant: "destructive",
+            });
+        } finally {
+            setNipcanLoading(false);
+        }
+    };
+
     // Récupération des données de référence
     const {data: provincesResponse, isError: provincesError} = useQuery({
         queryKey: ['provinces'],
@@ -791,7 +850,7 @@ const Candidature = () => {
             // Préparer les données pour l'endpoint
             const formData = new FormData();
             formData.append('niveau_id', concours.niveau_id.toString());
-            const existingNipcan = localStorage.getItem('candidat_nipcan');
+            const existingNipcan = loadedNipcan || localStorage.getItem('candidat_nipcan');
             if (existingNipcan) {
                 formData.append('existing_nipcan', existingNipcan);
             }
@@ -852,6 +911,36 @@ const Candidature = () => {
                             <CardTitle>Informations Personnelles</CardTitle>
                         </CardHeader>
                         <CardContent>
+                            <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50/70 p-4">
+                                <Label htmlFor="nipcan-search" className="text-sm font-semibold text-blue-950">
+                                    Déjà inscrit ? Récupérer vos données avec le NIPCAN
+                                </Label>
+                                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                    <Input
+                                        id="nipcan-search"
+                                        value={nipcanSearch}
+                                        onChange={(e) => setNipcanSearch(e.target.value)}
+                                        placeholder="Ex: NIP2026000005"
+                                        className="bg-white"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleLoadByNipcan}
+                                        disabled={nipcanLoading}
+                                        className="shrink-0"
+                                    >
+                                        <Search className="h-4 w-4"/>
+                                        {nipcanLoading ? 'Recherche...' : 'Récupérer'}
+                                    </Button>
+                                </div>
+                                {loadedNipcan && (
+                                    <p className="mt-2 text-xs font-medium text-blue-700">
+                                        Données chargées pour {loadedNipcan}. La nouvelle candidature sera liée à ce NIPCAN.
+                                    </p>
+                                )}
+                            </div>
+
                             <form onSubmit={handleSubmit} className="space-y-6">
 
                                 {/* Grille des autres champs du formulaire (Nom, Prénom, etc.) */}
@@ -860,7 +949,7 @@ const Candidature = () => {
                                         <Label htmlFor="prncan">Prénom *</Label>
                                         <Input
                                             id="prncan"
-                                            value={candidat.prncan}
+                                            value={candidat.prncan || ''}
                                             onChange={(e) => handleInputChange('prncan', e.target.value)}
                                             placeholder="Votre prénom"
                                             required
@@ -871,7 +960,7 @@ const Candidature = () => {
                                         <Label htmlFor="nomcan">Nom *</Label>
                                         <Input
                                             id="nomcan"
-                                            value={candidat.nomcan}
+                                            value={candidat.nomcan || ''}
                                             onChange={(e) => handleInputChange('nomcan', e.target.value)}
                                             placeholder="Votre nom"
                                             required
@@ -883,7 +972,7 @@ const Candidature = () => {
                                         <Input
                                             id="dtncan"
                                             type="date"
-                                            value={candidat.dtncan}
+                                            value={candidat.dtncan || ''}
                                             onChange={(e) => handleInputChange('dtncan', e.target.value)}
                                             required
                                             className={ageError ? 'border-red-500' : ''}
@@ -894,7 +983,7 @@ const Candidature = () => {
                                         <Label htmlFor="ldncan">Lieu de naissance *</Label>
                                         <Input
                                             id="ldncan"
-                                            value={candidat.ldncan}
+                                            value={candidat.ldncan || ''}
                                             onChange={(e) => handleInputChange('ldncan', e.target.value)}
                                             placeholder="Votre lieu de naissance"
                                             required
@@ -905,7 +994,7 @@ const Candidature = () => {
                                         <Label htmlFor="telcan">Téléphone *</Label>
                                         <Input
                                             id="telcan"
-                                            value={candidat.telcan}
+                                            value={candidat.telcan || ''}
                                             onChange={(e) => handleInputChange('telcan', e.target.value)}
                                             placeholder="+241 XX XX XX XX"
                                             required
@@ -917,7 +1006,7 @@ const Candidature = () => {
                                         <Input
                                             id="maican"
                                             type="email"
-                                            value={candidat.maican}
+                                            value={candidat.maican || ''}
                                             onChange={(e) => handleInputChange('maican', e.target.value)}
                                             placeholder="votre@email.com"
                                             required
@@ -927,7 +1016,7 @@ const Candidature = () => {
                                     {/* Sélecteurs de Provinces */}
                                     <div>
                                         <Label htmlFor="proorg">Province d'origine *</Label>
-                                        <Select value={candidat.proorg}
+                                        <Select value={candidat.proorg || ''}
                                                 onValueChange={(value) => handleInputChange('proorg', value)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Choisir votre province d'origine"/>
@@ -944,7 +1033,7 @@ const Candidature = () => {
 
                                     <div>
                                         <Label htmlFor="proact">Province actuelle</Label>
-                                        <Select value={candidat.proact}
+                                        <Select value={candidat.proact || ''}
                                                 onValueChange={(value) => handleInputChange('proact', value)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Choisir votre province actuelle"/>
@@ -961,7 +1050,7 @@ const Candidature = () => {
 
                                     <div className="md:col-span-2">
                                         <Label htmlFor="proaff">Province d'affectation souhaitée</Label>
-                                        <Select value={candidat.proaff}
+                                        <Select value={candidat.proaff || ''}
                                                 onValueChange={(value) => handleInputChange('proaff', value)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Choisir votre province d'affectation"/>

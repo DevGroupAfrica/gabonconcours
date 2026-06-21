@@ -20,6 +20,7 @@ import {
 import { Plus, Edit, Trash2, Shield } from 'lucide-react';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/use-toast';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 interface Admin {
     id: number;
@@ -38,6 +39,7 @@ interface Etablissement {
 }
 
 const AdminManagement: React.FC = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [admins, setAdmins] = useState<Admin[]>([]);
     const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -126,9 +128,10 @@ const AdminManagement: React.FC = () => {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cet administrateur ?')) {
-            return;
-        }
+        if (!await confirm({
+            title: 'Supprimer cet administrateur ?',
+            description: 'Son accès à l’administration sera immédiatement révoqué.',
+        })) return;
 
         try {
             const response = await api.delete(`/admin/management/admins/${id}`);
@@ -158,6 +161,7 @@ const AdminManagement: React.FC = () => {
     };
 
     return (
+        <>
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -305,6 +309,8 @@ const AdminManagement: React.FC = () => {
                 </div>
             </CardContent>
         </Card>
+        <ConfirmationDialog/>
+        </>
     );
 };
 

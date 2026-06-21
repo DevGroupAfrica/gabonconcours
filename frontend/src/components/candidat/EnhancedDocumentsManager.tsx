@@ -20,6 +20,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import ErrorModal from '@/components/modals/ErrorModal';
 import SuccessModal from '@/components/modals/SuccessModal';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 interface Document {
   id: number;
@@ -58,6 +59,7 @@ const EnhancedDocumentsManager: React.FC<EnhancedDocumentsManagerProps> = ({
   nupcan,
   concoursId
 }) => {
+  const {confirm, ConfirmationDialog} = useConfirmation();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [mandatoryCheck, setMandatoryCheck] = useState<MandatoryCheck | null>(null);
   const [loading, setLoading] = useState(false);
@@ -219,9 +221,10 @@ const EnhancedDocumentsManager: React.FC<EnhancedDocumentsManagerProps> = ({
   };
 
   const handleDelete = async (docId: number, nomdoc: string) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer le document "${nomdoc}" ?`)) {
-      return;
-    }
+    if (!await confirm({
+      title: 'Supprimer ce document ?',
+      description: `Le document « ${nomdoc} » sera définitivement supprimé.`,
+    })) return;
 
     try {
       const response = await fetch(`http://localhost:8002/api/documents-enhanced/${docId}`, {
@@ -524,6 +527,7 @@ const EnhancedDocumentsManager: React.FC<EnhancedDocumentsManagerProps> = ({
         onClose={() => setSuccessModal({ show: false, message: '' })}
         message={successModal.message}
       />
+      <ConfirmationDialog/>
     </div>
   );
 };

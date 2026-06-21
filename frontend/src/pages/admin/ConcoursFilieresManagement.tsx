@@ -14,8 +14,10 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Plus, Trash2, Save, BookOpen, School } from 'lucide-react';
 import { apiService } from '@/services/api';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 const ConcoursFilieresManagement = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [concours, setConcours] = useState<any[]>([]);
     const [etablissements, setEtablissements] = useState<any[]>([]);
     const [filieres, setFilieres] = useState<any[]>([]);
@@ -175,7 +177,10 @@ const ConcoursFilieresManagement = () => {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette association ?')) return;
+        if (!await confirm({
+            title: 'Supprimer cette association ?',
+            description: 'La filière ne sera plus proposée pour ce concours.',
+        })) return;
 
         try {
             const response = await apiService.makeRequest(`/concours-filieres/${id}`, 'DELETE');
@@ -327,6 +332,7 @@ const ConcoursFilieresManagement = () => {
                     )}
                 </CardContent>
             </Card>
+            <ConfirmationDialog/>
         </div>
     );
 };

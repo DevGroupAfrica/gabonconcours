@@ -68,7 +68,7 @@ const Concours = () => {
         queryKey: ['concours-filieres-map'],
         queryFn: async () => {
             const map: Record<number, any[]> = {};
-            for (const c of concours) {
+            for (const c of (concours as ConcoursType[])) {
                 try {
                     const response = await apiService.makeRequest(`/concours/${c.id}/filieres`, 'GET');
                     map[c.id] = response.data || [];
@@ -81,7 +81,7 @@ const Concours = () => {
         enabled: concours.length > 0
     });
     
-    const concoursFilieresMap = concoursWithFilieres.data || {};
+    const concoursFilieresMap: Record<number, any[]> = concoursWithFilieres.data || {};
     
     // Filtrer les concours
     const filteredConcours = useMemo(() => {

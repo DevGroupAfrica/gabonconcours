@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { apiService } from '@/services/api';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 interface CrudManagerProps {
     entity: 'concours' | 'etablissements' | 'filieres' | 'matieres';
@@ -16,6 +17,7 @@ interface CrudManagerProps {
 }
 
 const CrudManager: React.FC<CrudManagerProps> = ({ entity, title }) => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [formData, setFormData] = useState<any>({});
@@ -104,10 +106,12 @@ const CrudManager: React.FC<CrudManagerProps> = ({ entity, title }) => {
         setIsOpen(true);
     };
 
-    const handleDelete = (id: number) => {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cet élément ?')) {
-            deleteMutation.mutate(id);
-        }
+    const handleDelete = async (id: number) => {
+        if (!await confirm({
+            title: 'Supprimer cet élément ?',
+            description: 'Cette suppression peut affecter les données qui lui sont associées.',
+        })) return;
+        deleteMutation.mutate(id);
     };
 
     const renderForm = () => {
@@ -200,6 +204,7 @@ const CrudManager: React.FC<CrudManagerProps> = ({ entity, title }) => {
     }
 
     return (
+        <>
         <Card>
             <CardHeader>
                 <div className="flex items-center justify-between">
@@ -234,6 +239,8 @@ const CrudManager: React.FC<CrudManagerProps> = ({ entity, title }) => {
             </CardHeader>
             <CardContent>{renderTable()}</CardContent>
         </Card>
+        <ConfirmationDialog/>
+        </>
     );
 };
 

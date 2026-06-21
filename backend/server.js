@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 8002;
 
 // Créer les répertoires uploads s'ils n'existent pas
-const uploadDirs = ['./uploads/documents', './uploads/photos'];
+const uploadDirs = ['./uploads/documents', './uploads/photos', './uploads/messages'];
 uploadDirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, {recursive: true});

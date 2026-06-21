@@ -57,6 +57,30 @@ class Paiement {
         return rows[0] || null;
     }
 
+    static async findByReference(reference) {
+        const connection = getConnection();
+        const [rows] = await connection.execute(
+            `SELECT * FROM paiements WHERE reference_paiement = ? ORDER BY created_at DESC LIMIT 1`,
+            [reference]
+        );
+        return rows[0] || null;
+    }
+
+    static async updatePendingStatus(id, statut) {
+        const connection = getConnection();
+        const [result] = await connection.execute(
+            `UPDATE paiements
+             SET statut = ?, updated_at = NOW()
+             WHERE id = ? AND statut = 'en_attente'`,
+            [statut, id]
+        );
+
+        return {
+            changed: result.affectedRows > 0,
+            paiement: await Paiement.findById(id)
+        };
+    }
+
     static async update(id, data) {
         const connection = getConnection();
         const fields = Object.keys(data)

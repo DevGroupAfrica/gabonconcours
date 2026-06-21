@@ -5,6 +5,7 @@ import {Badge} from '@/components/ui/badge';
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
 import {Eye, Edit, Trash2, FileText, Calendar} from 'lucide-react';
 import {toast} from '@/hooks/use-toast';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 interface Document {
     id: number;
@@ -24,6 +25,7 @@ const CandidateExistingDocuments: React.FC<CandidateExistingDocumentsProps> = ({
                                                                                    documents,
                                                                                    onRefresh
                                                                                }) => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
 
     const getStatusBadge = (statut: string) => {
@@ -60,7 +62,10 @@ const CandidateExistingDocuments: React.FC<CandidateExistingDocumentsProps> = ({
     };
 
     const handleDeleteDocument = async (document: Document) => {
-        if (confirm(`Êtes-vous sûr de vouloir supprimer le document "${document.nomdoc}" ?`)) {
+        if (await confirm({
+            title: 'Supprimer ce document ?',
+            description: `Le document « ${document.nomdoc} » sera définitivement supprimé.`,
+        })) {
             try {
                 // Appel API pour supprimer le document
                 toast({
@@ -98,6 +103,7 @@ const CandidateExistingDocuments: React.FC<CandidateExistingDocumentsProps> = ({
     }
 
     return (
+        <>
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center">
@@ -169,6 +175,8 @@ const CandidateExistingDocuments: React.FC<CandidateExistingDocumentsProps> = ({
                 </Table>
             </CardContent>
         </Card>
+        <ConfirmationDialog/>
+        </>
     );
 };
 

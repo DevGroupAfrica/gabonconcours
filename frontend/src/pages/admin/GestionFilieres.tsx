@@ -4,8 +4,10 @@ import {toast} from '@/hooks/use-toast';
 import {apiService} from '@/services/api';
 import CrudTable from '@/components/admin/CrudTable';
 import FormDialog from '@/components/admin/FormDialog';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 const GestionFilieres = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [searchTerm, setSearchTerm] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
@@ -141,10 +143,12 @@ const GestionFilieres = () => {
         setDialogOpen(true);
     };
 
-    const handleDelete = (item: any) => {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cette filière ?')) {
-            deleteMutation.mutate(item.id.toString());
-        }
+    const handleDelete = async (item: any) => {
+        if (!await confirm({
+            title: 'Supprimer cette filière ?',
+            description: `La filière « ${item.nomfil || item.libfil || 'sélectionnée'} » ne sera plus disponible.`,
+        })) return;
+        deleteMutation.mutate(item.id.toString());
     };
 
     const handleSubmit = () => {
@@ -186,6 +190,7 @@ const GestionFilieres = () => {
                 onSubmit={handleSubmit}
                 isLoading={createMutation.isPending || updateMutation.isPending}
             />
+            <ConfirmationDialog/>
         </div>
     );
 };

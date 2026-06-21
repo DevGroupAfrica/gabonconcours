@@ -33,6 +33,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import AdminProtectedRoute from '@/components/admin/AdminProtectedRoute';
 import AdminLogin from '@/pages/admin/Login';
 import AdminConcours from '@/pages/admin/Concours';
+import AdminConcoursDetail from '@/pages/admin/ConcoursDetail';
 import AdminCandidats from '@/pages/admin/Candidats';
 import SuperAdminCandidats from '@/pages/admin/CandList';
 import AdminEtablissements from '@/pages/admin/Etablissements';
@@ -69,6 +70,7 @@ import MatieresManagementPage from './pages/admin/MatieresManagementPage';
 import APropos from './pages/APropos';
 import ForgotPassword from './pages/admin/ForgotPassword';
 import ResetPassword from './pages/admin/ResetPassword';
+import ApplicationErrorBoundary from '@/components/ApplicationErrorBoundary';
 
 
 const queryClient = new QueryClient({
@@ -96,6 +98,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
             <LanguageProvider>
                 <AdminAuthProvider>
+                    <ApplicationErrorBoundary>
                     <Router>
                     <Routes>
                         {/* Routes publiques */}
@@ -150,6 +153,7 @@ function App() {
                             <Route path="dashboard" element={<Dashboard/>}/>
                             <Route path="concours" element={<ConcoursBasedDashboard/>}/>
                             <Route path="concour" element={<AdminConcours/>}/>
+                            <Route path="concour/:id" element={<AdminConcoursDetail/>}/>
                             <Route path="candidats" element={<AdminCandidats/>}/>  
                              <Route path="candList" element={<SuperAdminCandidats/>}/>
                             <Route path="candidats/:nupcan" element={<CandidateManagement/>}/>
@@ -229,6 +233,7 @@ function App() {
                     </Routes>
                         <Toaster/>
                     </Router>
+                    </ApplicationErrorBoundary>
                 </AdminAuthProvider>
             </LanguageProvider>
         </QueryClientProvider>

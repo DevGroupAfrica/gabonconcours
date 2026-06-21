@@ -21,12 +21,14 @@ const SuccesContinue = () => {
         loadCandidature(decodedNupcan)
             .then((data) => {
                 // Vérification du paiement
-                const paiement = data?.paiement || data?.paiement;
+                const paiement = data?.paiement;
                 const montant = parseFloat(data?.concours?.fracnc || '0');
                 const isGratuit = montant === 0;
 
                 if (!isGratuit) {
-                    if (!paiement || paiement.status !== 'success') {
+                    const paiementValide = paiement?.statut === 'valide'
+                        || paiement?.status === 'success';
+                    if (!paiementValide) {
                         toast({
                             title: "Paiement requis",
                             description: "Veuillez effectuer le paiement avant de finaliser votre candidature.",

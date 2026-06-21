@@ -4,13 +4,12 @@ import {useMutation, useQuery} from '@tanstack/react-query';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Button} from '@/components/ui/button';
 import {Progress} from '@/components/ui/progress';
-import {Upload, FileText, X, CheckCircle, AlertCircle, ArrowLeft, PlusCircle} from 'lucide-react';
+import {Upload, FileText, X, CheckCircle, AlertCircle, ArrowLeft} from 'lucide-react';
 import Layout from '@/components/Layout';
 import {apiService} from '@/services/api';
 import {toast} from '@/hooks/use-toast';
 import {DocumentOption, Concours} from '@/types/entities';
 import {useCandidature} from '@/hooks/useCandidature';
-import {Input} from '@/components/ui/input';
 
 // Définition du type étendu pour les documents (pour inclure les personnalisés)
 interface UploadedDoc extends DocumentOption {
@@ -25,7 +24,6 @@ const Documents = () => {
 
     // Utiliser un Map pour stocker les documents et leurs métadonnées
     const [uploadedDocuments, setUploadedDocuments] = useState<Map<string, UploadedDoc>>(new Map());
-    const [customDocsCounter, setCustomDocsCounter] = useState(0);
 
     const [uploadSuccess, setUploadSuccess] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,13 +78,7 @@ const Documents = () => {
     // Créer les options de documents à partir des données du concours
     const documentOptions: DocumentOption[] = useMemo(() => {
         if (!documentsRequis || documentsRequis.length === 0) {
-            // Fallback vers les documents par défaut si aucun n'est défini
-            return [
-                {value: 'cni', label: 'Carte Nationale d\'Identité', required: true, description: ''},
-                {value: 'diplome', label: 'Diplôme ou Attestation', required: true, description: ''},
-                {value: 'certificat_medical', label: 'certificat médical', required: true, description: ''},
-                {value: 'acte_naissance', label: 'Acte de naissance', required: true, description: ''},
-            ];
+            return [];
         }
         
         return documentsRequis.map((doc: { nom: string; obligatoire: boolean; description?: string }) => ({
@@ -134,10 +126,12 @@ const Documents = () => {
 
             // Filtrer et envoyer uniquement les documents avec fichiers
             let fileCount = 0;
+            const documentNames: string[] = [];
             filesMap.forEach((doc, key) => {
                 // Vérifier que le document a bien un fichier avant de l'ajouter
                 if (doc.file && doc.file instanceof File) {
                     formData.append('documents', doc.file);
+                    documentNames.push(doc.label);
                     fileCount++;
                     console.log('📎 Ajout fichier:', doc.file.name, 'pour', doc.label);
                 }
@@ -148,6 +142,7 @@ const Documents = () => {
             if (fileCount === 0) {
                 throw new Error('Aucun fichier valide à envoyer');
             }
+            formData.append('document_names', JSON.stringify(documentNames));
 
             return apiService.createDossier(formData);
         },
@@ -389,38 +384,12 @@ const Documents = () => {
         });
     };  
 
-    // --- Logique Documents Personnalisés ---
-
-    const addCustomDocumentField = () => {
-        const newKey = `custom_${Date.now()}_${customDocsCounter}`;
-        setCustomDocsCounter(prev => prev + 1);
-        setUploadedDocuments(prev => new Map(prev).set(newKey, {
-            value: newKey,
-            label: '',
-            required: false,
-            file: null as unknown as File, // Marquer comme null initialement
-            isCustom: true
-        }));
-    };
-
-    const updateCustomDocumentLabel = (key: string, label: string) => {
-        setUploadedDocuments(prev => {
-            const newDocs = new Map(prev);
-            const doc = newDocs.get(key);
-            if (doc) {
-                newDocs.set(key, {...doc, label: label});
-            }
-            return newDocs;
-        });
-    };
-
     // Calculer les statistiques pour l'affichage
     const uploadedRequiredCount = uploadedRequiredDocs.length;
     const completionPercentage = Math.round(progress);
 
     const documentsList = Array.from(uploadedDocuments.values());
     const mandatoryDocsList = documentsList.filter(doc => !doc.isCustom);
-    const customDocsList = documentsList.filter(doc => doc.isCustom);
 
     if (!candidatureData) {
         // ... (Code de chargement/erreur de candidature)
@@ -654,69 +623,6 @@ const Documents = () => {
                                 </CardContent>
                             </Card>
                         )}
-
-                        {/* 3. Documents Personnalisés - Format compact */}
-                        <Card>
-                            <CardHeader className="pb-2 pt-3 px-4">
-                                <CardTitle className="text-base font-semibold">Documents Personnalisés (Optionnel)</CardTitle>
-                            </CardHeader>
-                            <CardContent className="px-4 pb-3 space-y-2">
-                                {customDocsList.map((doc) => (
-                                    <div key={doc.value}
-                                         className="grid grid-cols-12 gap-2 items-center p-2 border rounded-md bg-gray-50">
-                                        {/* Champ Titre */}
-                                        <div className="col-span-5">
-                                            <Input
-                                                placeholder="Nom du document"
-                                                value={doc.label}
-                                                onChange={(e) => updateCustomDocumentLabel(doc.value, e.target.value)}
-                                                required
-                                                className="bg-white h-7 text-xs"
-                                            />
-                                        </div>
-
-                                        {/* Champ Fichier / État */}
-                                        <div className="col-span-6">
-                                            {doc.file ? (
-                                                <span className="text-[10px] text-green-700 flex items-center gap-1 font-medium truncate">
-                                                    <CheckCircle className="h-2.5 w-2.5 flex-shrink-0"/> {doc.file.name}
-                                                </span>
-                                            ) : (
-                                                <Button
-                                                    onClick={() => triggerFileInput(doc.value)}
-                                                    variant="secondary"
-                                                    className="w-full text-xs h-7"
-                                                    disabled={!doc.label}
-                                                >
-                                                    <Upload className="h-3 w-3 mr-1"/> Fichier
-                                                </Button>
-                                            )}
-                                        </div>
-
-                                        {/* Bouton Suppression */}
-                                        <div className="col-span-1 flex justify-end">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => removeDocument(doc.value)}
-                                                className="h-6 w-6 p-0"
-                                                title="Supprimer"
-                                            >
-                                                <X className="h-3 w-3 text-red-500"/>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                <Button
-                                    onClick={addCustomDocumentField}
-                                    variant="outline"
-                                    className="w-full border-dashed border-primary/50 text-primary hover:bg-primary/5 h-8 text-xs"
-                                >
-                                    <PlusCircle className="h-3 w-3 mr-1"/> Ajouter un document
-                                </Button>
-                            </CardContent>
-                        </Card>
 
                         {/* Boutons d'Action Principaux */}
                         <div className="flex justify-between pt-2">

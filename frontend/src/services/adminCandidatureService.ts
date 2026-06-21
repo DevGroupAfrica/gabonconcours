@@ -9,6 +9,7 @@ export interface AdminCandidatureData {
     created_at: string;
     updated_at: string;
     candidat: {
+        nipcan?: string;
         nupcan: string;
         nomcan: string;
         prncan: string;
@@ -53,6 +54,7 @@ class AdminCandidatureService {
                 created_at: item.created_at,
                 updated_at: item.updated_at,
                 candidat: {
+                    nipcan: item.nipcan,
                     nupcan: item.nupcan,
                     nomcan: item.nomcan,
                     prncan: item.prncan,
@@ -103,6 +105,7 @@ class AdminCandidatureService {
                 created_at: item.created_at,
                 updated_at: item.updated_at,
                 candidat: {
+                    nipcan: item.nipcan,
                     nupcan: item.nupcan,
                     nomcan: item.nomcan,
                     prncan: item.prncan,

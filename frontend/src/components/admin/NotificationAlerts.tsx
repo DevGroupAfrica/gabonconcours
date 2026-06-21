@@ -1,7 +1,5 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Bell, FileText, Users, DollarSign } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { useAdminAuth } from '@/contexts/AdminAuthContext';
@@ -26,53 +24,30 @@ const NotificationAlerts = () => {
   }
 
   return (
-    <div className="space-y-4 mb-6">
+    <div className="mb-6 grid gap-3 md:grid-cols-3">
       {newCandidates > 0 && (
-        <Alert className="border-blue-200 bg-blue-50">
-          <Users className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="flex items-center gap-2">
-            Nouvelles Candidatures
-            <Badge variant="default" className="bg-blue-600">
-              {newCandidates}
-            </Badge>
-          </AlertTitle>
-          <AlertDescription>
-            Vous avez {newCandidates} nouvelle(s) candidature(s) en attente de traitement.
-          </AlertDescription>
-        </Alert>
+        <AlertItem icon={Users} value={newCandidates} title="Nouvelles candidatures" text="En attente de traitement"/>
       )}
 
       {pendingDocuments > 0 && (
-        <Alert className="border-orange-200 bg-orange-50">
-          <FileText className="h-4 w-4 text-orange-600" />
-          <AlertTitle className="flex items-center gap-2">
-            Documents à Valider
-            <Badge variant="default" className="bg-orange-600">
-              {pendingDocuments}
-            </Badge>
-          </AlertTitle>
-          <AlertDescription>
-            {pendingDocuments} document(s) nécessite(nt) votre validation.
-          </AlertDescription>
-        </Alert>
+        <AlertItem icon={FileText} value={pendingDocuments} title="Documents à valider" text="Nécessitent votre validation"/>
       )}
 
       {pendingPayments > 0 && (
-        <Alert className="border-green-200 bg-green-50">
-          <DollarSign className="h-4 w-4 text-green-600" />
-          <AlertTitle className="flex items-center gap-2">
-            Paiements en Attente
-            <Badge variant="default" className="bg-green-600">
-              {pendingPayments}
-            </Badge>
-          </AlertTitle>
-          <AlertDescription>
-            {pendingPayments} paiement(s) en attente de confirmation.
-          </AlertDescription>
-        </Alert>
+        <AlertItem icon={DollarSign} value={pendingPayments} title="Paiements en attente" text="À confirmer"/>
       )}
     </div>
   );
 };
+
+const AlertItem = ({icon: Icon, value, title, text}: any) => (
+  <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-4">
+    <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><Icon className="h-5 w-5"/></span>
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-semibold text-slate-900">{title}</p><span className="text-lg font-bold text-[#2A6DF3]">{value}</span></div>
+      <p className="mt-0.5 text-xs text-slate-500">{text}</p>
+    </div>
+  </div>
+);
 
 export default NotificationAlerts;

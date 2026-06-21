@@ -1,19 +1,110 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const Paiement = require('../models/Paiement');
 const Candidat = require('../models/Candidat');
-const cinetpayService = require('../services/cinetpayService');
 const Concours = require('../models/Concours');
+const cinetpayService = require('../services/cinetpayService');
+const singpayService = require('../services/singpayService');
+const mypvitService = require('../services/mypvitService');
+const {finalizeValidatedPayment} = require('../services/paymentFinalizationService');
 
-// GET /api/paiements/nupcan/:nupcan - Récupérer paiement par NUPCAN
+const SINGPAY_METHODS = new Set(['moov', 'airtel_money']);
+const MYPVIT_METHODS = new Set(['mypvit_moov', 'mypvit_airtel_money']);
+
+const createMerchantReference = (nupcan) => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+    return `GC${timestamp}${suffix}`.slice(0, 15);
+};
+
+const loadPaymentContext = async (paiementData) => {
+    const requestedNupcan = paiementData.nupcan || paiementData.nipcan;
+    let candidat = null;
+
+    if (requestedNupcan) {
+        candidat = await Candidat.findByNupcan(requestedNupcan);
+    }
+
+    if (!candidat && paiementData.candidat_id) {
+        candidat = await Candidat.findById(paiementData.candidat_id);
+    }
+
+    if (!candidat) {
+        const error = new Error('Candidat introuvable pour ce NUPCAN');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const concoursId = candidat.concours_id || paiementData.concours_id;
+    const concours = concoursId ? await Concours.findById(concoursId) : null;
+
+    if (!concours) {
+        const error = new Error('Concours introuvable pour cette candidature');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return {candidat, concours};
+};
+
+const syncSingPayPayment = async (paiement) => {
+    if (!paiement || paiement.statut !== 'en_attente' || !SINGPAY_METHODS.has(paiement.methode)) {
+        return paiement;
+    }
+
+    const transaction = await singpayService.findTransactionByReference(paiement.reference_paiement);
+    const nextStatus = singpayService.mapTransactionStatus(transaction);
+
+    if (nextStatus === 'en_attente') return paiement;
+
+    const update = await Paiement.updatePendingStatus(paiement.id, nextStatus);
+    if (update.changed && nextStatus === 'valide') {
+        await finalizeValidatedPayment(update.paiement);
+        return Paiement.findById(paiement.id);
+    }
+
+    return update.paiement;
+};
+
+const syncMyPVitPayment = async (paiement) => {
+    if (!paiement || paiement.statut !== 'en_attente' || !MYPVIT_METHODS.has(paiement.methode)) {
+        return paiement;
+    }
+
+    const transaction = await mypvitService.verifyPayment(paiement.reference_paiement);
+    const nextStatus = mypvitService.mapStatus(transaction?.status);
+    if (nextStatus === 'en_attente') return paiement;
+
+    const update = await Paiement.updatePendingStatus(paiement.id, nextStatus);
+    if (update.changed && nextStatus === 'valide') {
+        await finalizeValidatedPayment(update.paiement);
+        return Paiement.findById(paiement.id);
+    }
+
+    return update.paiement;
+};
+
+// GET /api/paiements/nupcan/:nupcan
 router.get('/nupcan/:nupcan', async (req, res) => {
     try {
-        const {nupcan} = req.params;
-        const decodedNupcan = decodeURIComponent(nupcan);
+        const decodedNupcan = decodeURIComponent(req.params.nupcan);
+        let paiement = await Paiement.findByNupcan(decodedNupcan);
 
-        console.log('Recherche paiement pour NUPCAN:', decodedNupcan);
-
-        const paiement = await Paiement.findByNupcan(decodedNupcan);
+        if (paiement?.statut === 'en_attente' && SINGPAY_METHODS.has(paiement.methode)) {
+            try {
+                paiement = await syncSingPayPayment(paiement);
+            } catch (error) {
+                console.warn('Vérification SingPay temporairement indisponible:', error.message);
+            }
+        }
+        if (paiement?.statut === 'en_attente' && MYPVIT_METHODS.has(paiement.methode)) {
+            try {
+                paiement = await syncMyPVitPayment(paiement);
+            } catch (error) {
+                console.warn('Vérification MyPVit temporairement indisponible:', error.message);
+            }
+        }
 
         res.json({
             success: true,
@@ -21,7 +112,7 @@ router.get('/nupcan/:nupcan', async (req, res) => {
             message: 'Paiement récupéré avec succès'
         });
     } catch (error) {
-        console.error('Erreur lors de la récupération du paiement:', error);
+        console.error('Erreur récupération paiement:', error);
         res.status(500).json({
             success: false,
             message: 'Erreur serveur',
@@ -30,37 +121,47 @@ router.get('/nupcan/:nupcan', async (req, res) => {
     }
 });
 
-// POST /api/paiements - Créer un nouveau paiement
-router.post('/', async (req, res) => {
+// GET /api/paiements/singpay/callback
+// Diagnostic navigateur/monitoring. SingPay envoie les notifications en POST.
+router.get('/singpay/callback', (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.json({
+        success: true,
+        service: 'SingPay callback',
+        status: 'ready',
+        method: 'POST'
+    });
+});
+
+// POST /api/paiements/singpay/callback
+router.post('/singpay/callback', async (req, res) => {
+    const reference = req.body?.transaction?.reference || req.body?.reference;
+
+    if (!reference) {
+        return res.status(400).json({success: false, message: 'Référence SingPay manquante'});
+    }
+
     try {
-        const paiementData = req.body;
-        console.log('Création paiement - Données reçues:', paiementData);
-
-        // === GESTION CINETPAY (inchangée) ===
-        if (paiementData.methode === 'cinetpay') {
-            const cinetResponse = await cinetpayService.initPayment(paiementData);
-            if (!cinetResponse.success) {
-                return res.status(400).json({
-                    success: false,
-                    message: cinetResponse.message
-                });
-            }
-            paiementData.statut = 'en_attente';
-            paiementData.reference_paiement = paiementData.reference_paiement || Date.now().toString();
-            const paiement = await Paiement.create(paiementData);
-
-            return res.status(201).json({
-                success: true,
-                data: {
-                    paiement,
-                    payment_url: cinetResponse.payment_url
-                },
-                message: 'Paiement en attente. Redirection vers CinetPay.'
-            });
+        const paiement = await Paiement.findByReference(reference);
+        if (!paiement) {
+            return res.status(404).json({success: false, message: 'Paiement introuvable'});
         }
 
-        // Validation des données obligatoires
-        const isGorriPayment = paiementData.methode === 'gorri';
+        const syncedPayment = await syncSingPayPayment(paiement);
+        return res.json({success: true, data: syncedPayment});
+    } catch (error) {
+        console.error('Erreur callback SingPay:', error);
+        return res.status(502).json({
+            success: false,
+            message: 'Impossible de vérifier la transaction auprès de SingPay'
+        });
+    }
+});
+
+// POST /api/paiements
+router.post('/', async (req, res) => {
+    try {
+        const paiementData = {...req.body};
 
         if (!paiementData.nupcan && !paiementData.nipcan) {
             return res.status(400).json({
@@ -70,132 +171,165 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // 💡 MODIFICATION : Validation Montant
-        if (!isGorriPayment) {
-            if (!paiementData.montant || parseFloat(paiementData.montant) <= 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Montant invalide',
-                    errors: ['Le montant doit être strictement supérieur à 0 pour un paiement non-Gorri']
-                });
+        if (paiementData.methode === 'cinetpay') {
+            const cinetResponse = await cinetpayService.initPayment(paiementData);
+            if (!cinetResponse.success) {
+                return res.status(400).json({success: false, message: cinetResponse.message});
             }
-        } else {
-            if (parseFloat(paiementData.montant) !== 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Incohérence Gorri',
-                    errors: ['Le montant doit être 0 pour un paiement Gorri']
-                });
-            }
+
+            paiementData.statut = 'en_attente';
+            paiementData.reference_paiement = paiementData.reference_paiement || Date.now().toString();
+            const paiement = await Paiement.create(paiementData);
+
+            return res.status(201).json({
+                success: true,
+                data: {paiement, payment_url: cinetResponse.payment_url},
+                message: 'Paiement en attente. Redirection vers CinetPay.'
+            });
         }
 
+        const {candidat, concours} = await loadPaymentContext(paiementData);
+        const officialAmount = Number(concours.fracnc || 0);
+        const basePaymentData = {
+            candidat_id: candidat.id,
+            concours_id: concours.id,
+            nupcan: candidat.nupcan,
+            montant: officialAmount,
+            methode: paiementData.methode,
+            numero_telephone: paiementData.numero_telephone || paiementData.telephone
+        };
 
-        // Récupérer/Confirmer les informations du candidat et du concours
-        let candidat = null;
-        let concours = null;
-        const nupcan = paiementData.nupcan || paiementData.nipcan;
+        const existingPayment = await Paiement.findByNupcan(candidat.nupcan);
+        if (existingPayment?.statut === 'valide') {
+            return res.status(200).json({
+                success: true,
+                data: existingPayment,
+                message: 'Ce paiement est déjà validé'
+            });
+        }
 
-        // 💡 Utiliser les IDs du front-end si disponibles, sinon chercher par NUPCAN
-        const candidat_id_from_client = paiementData.candidat_id;
-        const concours_id_from_client = paiementData.concours_id;
-
-        try {
-            // 1. Chercher le candidat (principalement pour obtenir l'email et les autres IDs)
-            if (candidat_id_from_client) {
-                candidat = await Candidat.findById(candidat_id_from_client);
-            } else if (nupcan) {
-                candidat = await Candidat.findByNupcan(nupcan);
+        if (paiementData.methode === 'gorri') {
+            if (officialAmount !== 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Ce concours n’est pas gratuit'
+                });
             }
 
-            if (candidat) {
-                // Mettre à jour les IDs dans le payload avec ceux du candidat trouvé
-                paiementData.candidat_id = candidat.id;
-                paiementData.concours_id = candidat.concours_id;
-                paiementData.nupcan = candidat.nupcan;
+            const paiement = await Paiement.create({
+                ...basePaymentData,
+                statut: 'valide',
+                reference_paiement: `GRATUIT-${Date.now()}`
+            });
+            await finalizeValidatedPayment(paiement);
 
-                // Récupérer le concours pour le reçu/email
-                concours = await Concours.findById(candidat.concours_id);
+            return res.status(201).json({
+                success: true,
+                data: paiement,
+                message: 'Candidature gratuite finalisée'
+            });
+        }
+
+        if (!SINGPAY_METHODS.has(paiementData.methode)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Méthode de paiement non prise en charge'
+            });
+        }
+
+        if (!Number.isFinite(officialAmount) || officialAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Montant du concours invalide'
+            });
+        }
+
+        if (!basePaymentData.numero_telephone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Numéro de téléphone requis'
+            });
+        }
+
+        if (
+            existingPayment?.statut === 'en_attente'
+            && (SINGPAY_METHODS.has(existingPayment.methode) || MYPVIT_METHODS.has(existingPayment.methode))
+        ) {
+            return res.status(200).json({
+                success: true,
+                data: existingPayment,
+                message: 'Un paiement mobile est déjà en attente'
+            });
+        }
+
+        const reference = createMerchantReference(candidat.nupcan);
+        const paymentProvider = String(process.env.MOBILE_PAYMENT_PROVIDER || 'mypvit').toLowerCase();
+        const storedMethod = paymentProvider === 'mypvit'
+            ? `mypvit_${paiementData.methode}`
+            : paiementData.methode;
+        const paiement = await Paiement.create({
+            ...basePaymentData,
+            methode: storedMethod,
+            statut: 'en_attente',
+            reference_paiement: reference
+        });
+
+        try {
+            if (paymentProvider === 'mypvit') {
+                const mypvitResponse = await mypvitService.initPayment({
+                    montant: officialAmount,
+                    reference_paiement: reference,
+                    numero_telephone: basePaymentData.numero_telephone,
+                    methode: paiementData.methode,
+                    nupcan: candidat.nupcan,
+                    description: `Frais concours - ${concours.libcnc || candidat.nupcan}`
+                });
+                const immediateStatus = mypvitService.mapStatus(mypvitResponse?.status);
+                if (immediateStatus === 'rejete') {
+                    await Paiement.updatePendingStatus(paiement.id, 'rejete');
+                    return res.status(400).json({
+                        success: false,
+                        message: mypvitResponse?.message || 'MyPVit a refusé la demande de paiement'
+                    });
+                }
             } else {
-                // Si aucune donnée candidat trouvée, utiliser les IDs bruts du payload si présents
-                if (candidat_id_from_client && concours_id_from_client) {
-                    concours = await Concours.findById(concours_id_from_client);
-                    console.warn('Candidat non trouvé, mais paiement en cours avec IDs de concours/candidat fournis par le client.');
-                } else {
-                    console.log('Aucun candidat trouvé. Le reçu/email sera incomplet.');
+                singpayService.assertConfigured();
+                const singpayResponse = await singpayService.initiatePayment({
+                    amount: officialAmount,
+                    reference,
+                    phoneNumber: basePaymentData.numero_telephone,
+                    method: paiementData.methode
+                });
+
+                if (singpayResponse?.status?.success === false) {
+                    await Paiement.updatePendingStatus(paiement.id, 'rejete');
+                    return res.status(400).json({
+                        success: false,
+                        message: singpayResponse.status.message || 'SingPay a refusé la demande de paiement'
+                    });
                 }
             }
         } catch (error) {
-            console.log('Erreur lors de la recherche/confirmation du candidat/concours:', error.message);
+            await Paiement.updatePendingStatus(paiement.id, 'rejete');
+            throw error;
         }
 
-        // Créer le paiement (avec ou sans candidat_id/concours_id, le modèle gère le null)
-        const paiement = await Paiement.create(paiementData);
-        console.log('Paiement créé avec succès:', paiement.id);
-
-        // Générer le reçu PDF si le paiement est validé ET que les données de base sont là
-        if (paiement.statut === 'valide' && candidat && concours) {
-            try {
-                // Générer le PDF
-                const pdfService = require('../services/pdfService');
-                const receipt = await pdfService.generatePaymentReceipt(candidat, paiement, concours);
-                await Paiement.update(paiement.id, { recu_path: receipt.relativePath });
-                paiement.recu_path = receipt.relativePath;
-
-                // Envoyer l'email de confirmation avec le reçu
-                const paymentEmailService = require('../services/paymentEmailService');
-                await paymentEmailService.sendPaymentReceipt({
-                    to: candidat.maican,
-                    candidat: {
-                        nom: candidat.nomcan,
-                        prenom: candidat.prncan,
-                        nupcan: candidat.nupcan,
-                        email: candidat.maican
-                    },
-                    montant: paiement.montant,
-                    reference: paiement.reference_paiement,
-                    concours: concours.libcnc || concours.nom,
-                    date: paiement.created_at || new Date()
-                });
-
-                // Créer une notification
-                const Notification = require('../models/Notification');
-                await Notification.create({
-                    candidat_id: candidat.id,
-                    type: 'paiement',
-                    titre: 'Paiement confirmé',
-                    message: `Votre paiement de ${paiement.montant} FCFA a été validé avec succès. Un reçu a été envoyé à votre email.`,
-                    lu: false
-                });
-                
-                // 🔔 Vérifier et mettre à jour le statut de participation
-                const ParticipationService = require('../services/participationService');
-                await ParticipationService.checkAndUpdateParticipationStatus(
-                    candidat.id,
-                    concours.id
-                );
-                
-                console.log('✅ Reçu PDF généré et email envoyé avec succès');
-            } catch (pdfError) {
-                console.error('Erreur génération reçu/email:', pdfError);
-            }
-        }
-
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             data: paiement,
-            message: 'Paiement créé avec succès'
+            message: paymentProvider === 'mypvit'
+                ? 'Demande MyPVit envoyée. Confirmez le paiement sur votre téléphone.'
+                : 'Demande SingPay envoyée. Confirmez le paiement sur votre téléphone.'
         });
     } catch (error) {
-        console.error('Erreur lors de la création du paiement:', error);
-        res.status(500).json({
+        console.error('Erreur création paiement:', error.providerResponse || error.message);
+        res.status(error.statusCode || 500).json({
             success: false,
-            message: 'Erreur lors de la création du paiement',
-            errors: [error.message]
+            message: error.publicMessage || error.message || 'Erreur lors de la création du paiement',
+            code: error.code,
+            errors: process.env.NODE_ENV === 'development' ? [error.message] : undefined
         });
     }
 });
-
-
-// ... (reste des routes cinetpay/GET/PUT inchangées)
 
 module.exports = router;

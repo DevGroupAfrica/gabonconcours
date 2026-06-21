@@ -7,15 +7,6 @@ import {Modal, ModalContent} from '@/components/ui/modal';
 import {documentService} from '@/services/documentService';
 import {toast} from '@/hooks/use-toast';
 
-const DOCUMENT_TYPES = [
-    'Acte de naissance',
-    'Carte nationale d’identité',
-    'Diplôme ou attestation de réussite',
-    'Bulletin de notes',
-    'Certificat médical',
-    'Autre document'
-];
-
 const DocumentsManager = ({nupcan}: {nupcan: string}) => {
     const [uploadOpen, setUploadOpen] = useState(false);
     const [replaceDocument, setReplaceDocument] = useState<any>(null);
@@ -28,6 +19,18 @@ const DocumentsManager = ({nupcan}: {nupcan: string}) => {
         queryKey: ['documents', nupcan],
         queryFn: () => documentService.getDocumentsByNupcan(nupcan),
     });
+    const {
+        data: requiredDocuments = [],
+        isLoading: requiredDocumentsLoading,
+        isError: requiredDocumentsError,
+    } = useQuery({
+        queryKey: ['required-documents', nupcan],
+        queryFn: () => documentService.getRequiredDocuments(nupcan),
+    });
+
+    const availableDocumentTypes = requiredDocuments.filter(required =>
+        !documents.some(document => document.nomdoc.toLowerCase() === required.nom.toLowerCase())
+    );
 
     const resetForm = () => {
         setDocumentName('');
@@ -135,7 +138,10 @@ const DocumentsManager = ({nupcan}: {nupcan: string}) => {
                         <h3 className="text-lg font-semibold text-slate-950">Pièces du dossier</h3>
                         <p className="mt-1 text-sm text-slate-500">Ajoutez uniquement les pièces demandées pour cette candidature.</p>
                     </div>
-                    <Button onClick={() => setUploadOpen(true)} disabled={documents.length >= 6}>
+                    <Button
+                        onClick={() => setUploadOpen(true)}
+                        disabled={requiredDocumentsLoading || requiredDocumentsError || availableDocumentTypes.length === 0}
+                    >
                         <Upload className="h-4 w-4"/>
                         Ajouter une pièce
                     </Button>
@@ -144,6 +150,11 @@ const DocumentsManager = ({nupcan}: {nupcan: string}) => {
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
                     <p><span className="font-semibold">Contrôlez vos pièces avant validation.</span> Vous pouvez visualiser et remplacer un document en attente ou rejeté.</p>
                 </div>
+                {requiredDocumentsError && (
+                    <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        Impossible de charger la configuration des documents requis pour ce concours.
+                    </div>
+                )}
 
                 {isLoading ? (
                     <div className="p-7 text-center text-sm text-slate-500">Chargement des documents…</div>
@@ -200,6 +211,7 @@ const DocumentsManager = ({nupcan}: {nupcan: string}) => {
                 pending={uploadMutation.isPending || replaceMutation.isPending}
                 onClose={resetForm}
                 onNameChange={setDocumentName}
+                documentTypes={availableDocumentTypes}
                 onFileChange={selectFile}
                 onSubmit={replaceDocument ? submitReplace : submitUpload}
             />
@@ -214,7 +226,7 @@ const DocumentsManager = ({nupcan}: {nupcan: string}) => {
     );
 };
 
-const DocumentModal = ({open, replace, documentName, file, pending, onClose, onNameChange, onFileChange, onSubmit}: any) => (
+const DocumentModal = ({open, replace, documentName, file, pending, onClose, onNameChange, documentTypes, onFileChange, onSubmit}: any) => (
     <Modal open={open} onOpenChange={(value) => !value && onClose()}>
         <ModalContent>
             <div className="space-y-6 p-6">
@@ -232,7 +244,11 @@ const DocumentModal = ({open, replace, documentName, file, pending, onClose, onN
                             onChange={(event) => onNameChange(event.target.value)}
                         >
                             <option value="">Sélectionner une pièce</option>
-                            {DOCUMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                            {documentTypes.map((document: any) => (
+                                <option key={document.nom} value={document.nom}>
+                                    {document.nom}{document.obligatoire ? ' *' : ''}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <div>

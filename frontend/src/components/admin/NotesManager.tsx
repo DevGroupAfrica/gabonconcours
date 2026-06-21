@@ -110,7 +110,14 @@ const NotesManager: React.FC<NotesManagerProps> = ({
 
             if (notesResponse.success && notesResponse.data) {
                 const data = notesResponse.data as any;
-                setNotes(Array.isArray(data.notes) ? data.notes : []);
+                const loadedNotes = Array.isArray(data.notes) ? data.notes : [];
+                setNotes(loadedNotes.map((note: Note) => {
+                    const matiere = safeMatieres.find(item => item.id === note.matiere_id);
+                    return {
+                        ...note,
+                        coefficient: matiere?.coefficient ?? note.coefficient ?? 1
+                    };
+                }));
                 setMoyenne(data.moyenne || null);
             } else {
                 setNotes([]);
@@ -169,7 +176,8 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                 newNotes = [...notes];
                 newNotes[existingNoteIndex] = {
                     ...newNotes[existingNoteIndex],
-                    note: noteValue
+                    note: noteValue,
+                    coefficient: matiere?.coefficient ?? newNotes[existingNoteIndex].coefficient
                 };
             } else if (matiere) {
                 newNotes = [...notes, {

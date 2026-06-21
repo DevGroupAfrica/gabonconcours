@@ -23,6 +23,7 @@ import {toast} from '@/hooks/use-toast';
 import Layout from '@/components/Layout';
 import {useCandidatureState} from '@/hooks/useCandidatureState';
 import {apiService} from '@/services/api';
+import {waitForPaymentConfirmation} from '@/services/paymentStatus';
 import {validatePhoneNumber, formatPhoneDisplay} from '@/utils/phoneValidation';
 
 const Paiement = () => {
@@ -85,11 +86,11 @@ const Paiement = () => {
 
         // =========================================================
         // GESTION DU CONCOURS GRATUIT (is_gorri / Montant = 0)
-        // Simule l'enregistrement du paiement pour valider l'étape
+        // Enregistre la gratuité afin de valider l'étape
         // =========================================================
         if (montant === 0) {
             try {
-                // 1. Préparation des données de paiement simulé à 0 FCFA
+                // 1. Préparation de la validation gratuite à 0 FCFA
                 const paiementGratuitData = {
                     nupcan: candidat.nupcan || numeroCandidature,
                     montant: 0.00,
@@ -167,9 +168,7 @@ const Paiement = () => {
                 nupcan: candidat.nupcan || numeroCandidature, // Fallback sur numeroCandidature
                 montant: montant,
                 methode: selectedMethod,
-                statut: 'valide', // Ceci devrait être 'en_attente' pour un vrai process
                 numero_telephone: phoneNumber,
-                reference_paiement: `PAY-${Date.now()}`
             };
 
             console.log('Données paiement:', paiementData);
@@ -186,28 +185,72 @@ const Paiement = () => {
             const response = await apiService.createPaiement(paiementData);
 
             if (!response.success) {
+                if (response.code === 'SINGPAY_NOT_CONFIGURED') {
+                    throw new Error('SERVICE_PAIEMENT_NON_CONFIGURE');
+                }
+                if (response.code === 'SINGPAY_WALLET_PENDING') {
+                    throw new Error('PORTEFEUILLE_SINGPAY_EN_ATTENTE');
+                }
+                if (response.code === 'MYPVIT_AMOUNT_TOO_LOW') {
+                    throw new Error('MONTANT_MYPVIT_TROP_BAS');
+                }
+                if (response.code === 'MYPVIT_INVALID_OPERATOR_PHONE') {
+                    throw new Error('NUMERO_OPERATEUR_INVALIDE');
+                }
                 throw new Error(response.message || 'Erreur lors du paiement');
             }
 
             toast({
-                title: "Paiement validé",
-                description: "Votre paiement a été traité avec succès. Un email de confirmation vous a été envoyé."
+                title: "Demande envoyée",
+                description: "Confirmez maintenant le paiement sur votre téléphone."
             });
 
-            await updateProgression(numeroCandidature || '', 'paiement');
-            navigate(`/succes/${encodeURIComponent(numeroCandidature || '')}`);
+            const nupcan = paiementData.nupcan;
+            const paymentStatus = await waitForPaymentConfirmation(nupcan);
+
+            if (paymentStatus === 'valide') {
+                toast({
+                    title: "Paiement confirmé",
+                    description: "Votre paiement MyPVit a été validé avec succès."
+                });
+                await updateProgression(numeroCandidature || '', 'paiement');
+                navigate(`/succes/${encodeURIComponent(numeroCandidature || '')}`);
+                return;
+            }
+
+            if (paymentStatus === 'rejete') {
+                throw new Error('Le paiement a été refusé ou a expiré');
+            }
+
+            toast({
+                title: "Paiement en attente",
+                description: "La confirmation prend plus de temps que prévu. Vous pouvez suivre son statut depuis votre tableau de bord."
+            });
+            navigate(`/dashboard/${encodeURIComponent(numeroCandidature || '')}`);
 
         } catch (error: any) {
             console.error('Erreur paiement:', error);
 
             let errorMessage = "Une erreur est survenue lors du paiement";
 
-            if (error.message.includes('NUPCAN')) {
+            if (error.message === 'SERVICE_PAIEMENT_NON_CONFIGURE') {
+                errorMessage = "Le paiement mobile n’est pas encore configuré. Veuillez contacter l’administrateur.";
+            } else if (error.message === 'PORTEFEUILLE_SINGPAY_EN_ATTENTE') {
+                errorMessage = "Le portefeuille SingPay est en attente d’activation. Veuillez contacter l’administrateur.";
+            } else if (error.message === 'MONTANT_MYPVIT_TROP_BAS') {
+                errorMessage = "MyPVit exige un montant supérieur à 500 FCFA. Pour un succès en test, utilisez un montant entre 501 et 999 FCFA.";
+            } else if (error.message === 'NUMERO_OPERATEUR_INVALIDE') {
+                errorMessage = "Le numéro ne correspond pas à l’opérateur sélectionné.";
+            } else if (error.message.includes('NUPCAN')) {
                 errorMessage = "Erreur d'identification du candidat";
             } else if (error.message.includes('montant')) {
                 errorMessage = "Erreur de montant du paiement";
             } else if (error.message.includes('serveur')) {
                 errorMessage = "Erreur de connexion au serveur";
+            } else if (error.message.includes('refusé') || error.message.includes('expiré')) {
+                errorMessage = error.message;
+            } else if (error.message) {
+                errorMessage = error.message;
             }
 
             toast({

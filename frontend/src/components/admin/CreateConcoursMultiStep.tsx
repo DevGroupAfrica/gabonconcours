@@ -162,13 +162,30 @@ export const CreateConcoursMultiStep: React.FC<CreateConcoursMultiStepProps> = (
     };
 
     const handleSubmit = async () => {
+        const configuredDocuments = formData.documents_requis
+            .map(document => ({ ...document, nom: document.nom.trim(), description: document.description.trim() }))
+            .filter(document => document.nom);
+        const normalizedNames = configuredDocuments.map(document => document.nom.toLocaleLowerCase('fr'));
+
+        if (!configuredDocuments.length || new Set(normalizedNames).size !== normalizedNames.length) {
+            toast({
+                title: 'Documents requis invalides',
+                description: !configuredDocuments.length
+                    ? 'Configurez au moins un document à téléverser pour ce concours.'
+                    : 'Chaque document requis doit avoir un nom unique.',
+                variant: 'destructive',
+            });
+            setCurrentStep(4);
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const payload = {
                 ...formData,
                 stacnc: '1', // Ouvert par défaut
                 series_bac_acceptees: isPremiereAnnee ? JSON.stringify(formData.series_bac_acceptees) : null,
-                documents_requis: JSON.stringify(formData.documents_requis),
+                documents_requis: JSON.stringify(configuredDocuments),
                 criteres_selection: JSON.stringify(formData.criteres_selection),
                 modalites_inscription: JSON.stringify(formData.modalites_inscription),
                 conditions_eligibilite: JSON.stringify(formData.conditions_eligibilite),

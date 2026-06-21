@@ -142,7 +142,7 @@ router.get('/candidat/:nupcan', async (req, res) => {
                 n.note,
                 n.coefficient,
                 m.nom_matiere as nommat,
-                m.coefficient as coefmat,
+                n.coefficient as coefmat,
                 m.duree
             FROM notes n
             LEFT JOIN matieres m ON n.matiere_id = m.id
@@ -153,8 +153,8 @@ router.get('/candidat/:nupcan', async (req, res) => {
         // Calculer la moyenne générale
         let moyenneGenerale = null;
         if (notes.length > 0) {
-            const totalPoints = notes.reduce((sum, n) => sum + (parseFloat(n.note) * parseFloat(n.coefmat || n.coefficient)), 0);
-            const totalCoef = notes.reduce((sum, n) => sum + parseFloat(n.coefmat || n.coefficient), 0);
+            const totalPoints = notes.reduce((sum, n) => sum + (parseFloat(n.note) * parseFloat(n.coefficient || 1)), 0);
+            const totalCoef = notes.reduce((sum, n) => sum + parseFloat(n.coefficient || 1), 0);
             moyenneGenerale = totalCoef > 0 ? (totalPoints / totalCoef).toFixed(2) : null;
         }
 

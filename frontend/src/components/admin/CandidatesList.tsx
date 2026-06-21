@@ -57,9 +57,16 @@ const CandidatesList: React.FC<CandidatesListProps> = ({candidats, isLoading}) =
                                                 <span>{candidat.telcan}</span>
                                             </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            NUPCAN: {candidat.nupcan}
-                                        </p>
+                                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                            <p>
+                                                <span className="font-semibold text-slate-600">NIP :</span>{' '}
+                                                {candidat.nipcan || 'Non attribué'}
+                                            </p>
+                                            <p>
+                                                <span className="font-semibold text-slate-600">NUPCAN :</span>{' '}
+                                                {candidat.nupcan}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">

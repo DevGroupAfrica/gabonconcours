@@ -4,6 +4,10 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const { getConnection } = require('../config/database');
+const {
+    getRequiredDocumentsForConcours,
+    isDocumentAllowed,
+} = require('../services/requiredDocumentsService');
 
 // 📂 Dossier de stockage
 const uploadDir = path.join(__dirname, '../uploads/documents');
@@ -36,20 +40,18 @@ const upload = multer({
 /* =====================================================
    📋 LISTE DES DOCUMENTS OBLIGATOIRES
 ===================================================== */
-const DOCUMENTS_OBLIGATOIRES = [
-    { nomdoc: 'Acte de naissance', type: 'pdf', required: true },
-    { nomdoc: 'Carte Nationale d\'Identité', type: 'pdf', required: true },
-    { nomdoc: 'Attestation de niveau', type: 'pdf', required: true },
-    { nomdoc: 'Photo d\'identité', type: 'image', required: true },
-    { nomdoc: 'Certificat de résidence', type: 'pdf', required: false },
-    { nomdoc: 'Diplôme', type: 'pdf', required: false }
-];
-
 /* =====================================================
    🔹 VÉRIFICATION DES DOCUMENTS OBLIGATOIRES
 ===================================================== */
 async function checkMandatoryDocuments(candidatId) {
     const connection = getConnection();
+    const [candidats] = await connection.execute(
+        'SELECT concours_id FROM candidats WHERE id = ? LIMIT 1',
+        [candidatId]
+    );
+    const requiredDocuments = candidats.length
+        ? await getRequiredDocumentsForConcours(candidats[0].concours_id)
+        : [];
     
     const [existingDocs] = await connection.execute(`
         SELECT DISTINCT d.nomdoc
@@ -60,9 +62,14 @@ async function checkMandatoryDocuments(candidatId) {
 
     const existingDocNames = existingDocs.map(doc => doc.nomdoc.toLowerCase().trim());
     
-    const missingDocs = DOCUMENTS_OBLIGATOIRES
-        .filter(doc => doc.required)
-        .filter(doc => !existingDocNames.includes(doc.nomdoc.toLowerCase()));
+    const missingDocs = requiredDocuments
+        .filter(doc => doc.obligatoire)
+        .filter(doc => !existingDocNames.includes(doc.nom.toLowerCase()))
+        .map(doc => ({
+            nomdoc: doc.nom,
+            type: 'pdf/image',
+            required: true,
+        }));
 
     return {
         allPresent: missingDocs.length === 0,
@@ -96,6 +103,34 @@ router.post('/', upload.single('file'), async (req, res) => {
             });
         }
 
+        const [candidates] = await connection.execute(
+            'SELECT concours_id, nupcan FROM candidats WHERE id = ? LIMIT 1',
+            [candidat_id]
+        );
+        if (!candidates.length || Number(candidates[0].concours_id) !== Number(concours_id)) {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({
+                success: false,
+                message: 'Ce concours ne correspond pas à la candidature'
+            });
+        }
+        if (nupcan && candidates[0].nupcan !== nupcan) {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({
+                success: false,
+                message: 'Le NUPCAN ne correspond pas à la candidature'
+            });
+        }
+
+        const requiredDocuments = await getRequiredDocumentsForConcours(candidates[0].concours_id);
+        if (!isDocumentAllowed(nomdoc, requiredDocuments)) {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({
+                success: false,
+                message: `Le document "${nomdoc}" n'est pas requis pour ce concours`
+            });
+        }
+
         // Vérifier si le document existe déjà pour ce candidat
         const [existing] = await connection.execute(`
             SELECT d.id, d.nomdoc
@@ -110,22 +145,6 @@ router.post('/', upload.single('file'), async (req, res) => {
                 success: false, 
                 message: `Le document "${nomdoc}" existe déjà. Veuillez le remplacer plutôt que d'en créer un nouveau.`,
                 existing_document_id: existing[0].id
-            });
-        }
-
-        // Vérifier la limite de documents (6 max)
-        const [countResult] = await connection.execute(`
-            SELECT COUNT(*) as total
-            FROM documents d
-            JOIN dossiers dos ON d.id = dos.document_id
-            WHERE dos.candidat_id = ?
-        `, [candidat_id]);
-
-        if (countResult[0].total >= 6) {
-            fs.unlinkSync(file.path);
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Limite de 6 documents atteinte. Supprimez un document avant d\'en ajouter un nouveau.' 
             });
         }
 

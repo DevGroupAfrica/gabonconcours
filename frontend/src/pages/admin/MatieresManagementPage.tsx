@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { apiService } from '@/services/api';
@@ -105,19 +105,34 @@ const MatieresManagementPage = () => {
     };
 
     const handleCreate = () => {
-        createMutation.mutate(formData);
+        createMutation.mutate({
+            nom_matiere: formData.nom,
+            code_matiere: formData.code,
+            coefficient: formData.coefficient,
+            type: formData.type,
+            description: formData.description
+        });
     };
 
     const handleUpdate = () => {
         if (selectedMatiere) {
-            updateMutation.mutate({ id: selectedMatiere.id, data: formData });
+            updateMutation.mutate({
+                id: selectedMatiere.id,
+                data: {
+                    nom_matiere: formData.nom,
+                    code_matiere: formData.code,
+                    coefficient: formData.coefficient,
+                    type: formData.type,
+                    description: formData.description
+                }
+            });
         }
     };
 
     const handleEdit = (matiere: any) => {
         setSelectedMatiere(matiere);
         setFormData({
-            nom: matiere.nom_matiere || matiere.nom,
+            nom: matiere.nom_matiere || matiere.nom || '',
             code: matiere.code_matiere || matiere.code || '',
             coefficient: matiere.coefficient || 1,
             type: matiere.type || 'ecrit',
@@ -226,6 +241,9 @@ const MatieresManagementPage = () => {
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Créer une Nouvelle Matière</DialogTitle>
+                            <DialogDescription>
+                                Renseignez les informations de la matière à associer aux concours et filières.
+                            </DialogDescription>
                         </DialogHeader>
                         <FormFields />
                         <Button
@@ -313,6 +331,9 @@ const MatieresManagementPage = () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Modifier la Matière</DialogTitle>
+                        <DialogDescription>
+                            Modifiez les informations de cette matière.
+                        </DialogDescription>
                     </DialogHeader>
                     <FormFields />
                     <Button

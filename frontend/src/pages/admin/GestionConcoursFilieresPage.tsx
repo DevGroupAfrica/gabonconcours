@@ -9,8 +9,10 @@ import { apiService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 import ErrorModal from '@/components/modals/ErrorModal';
 import SuccessModal from '@/components/modals/SuccessModal';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 const GestionConcoursFilieresPage = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const queryClient = useQueryClient();
     const { toast } = useToast();
     
@@ -125,10 +127,12 @@ const GestionConcoursFilieresPage = () => {
         addAssociationMutation.mutate();
     };
 
-    const handleDeleteAssociation = (id: number) => {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cette association ?')) {
-            deleteAssociationMutation.mutate(id);
-        }
+    const handleDeleteAssociation = async (id: number) => {
+        if (!await confirm({
+            title: 'Supprimer cette association ?',
+            description: 'La filière ne sera plus liée à ce concours.',
+        })) return;
+        deleteAssociationMutation.mutate(id);
     };
 
     return (
@@ -303,6 +307,7 @@ const GestionConcoursFilieresPage = () => {
                 onClose={() => setShowSuccessModal(false)}
                 message={successMessage}
             />
+            <ConfirmationDialog/>
         </div>
     );
 };

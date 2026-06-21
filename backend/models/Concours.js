@@ -159,12 +159,33 @@ class Concours {
 
     static async update(id, concoursData) {
         const connection = getConnection();
-
-        // CORRECTION: Récupérer seulement les champs valides
+        const allowedFields = new Set([
+            'etablissement_id', 'niveau_id', 'libcnc', 'sescnc', 'debcnc', 'fincnc',
+            'stacnc', 'agecnc', 'fracnc', 'etddos', 'is_gorri', 'type_concours',
+            'description_concours', 'nombre_places_total', 'duree_formation',
+            'diplome_delivre', 'date_publication_resultats', 'date_debut_cours',
+            'series_bac_acceptees', 'documents_requis', 'criteres_selection',
+            'modalites_inscription', 'conditions_eligibilite', 'contact_email',
+            'contact_telephone', 'lieu_examen', 'informations_complementaires'
+        ]);
+        const jsonFields = new Set([
+            'series_bac_acceptees', 'documents_requis', 'criteres_selection',
+            'modalites_inscription', 'conditions_eligibilite'
+        ]);
+        const nullableFields = new Set([
+            'etablissement_id', 'niveau_id', 'debcnc', 'fincnc', 'agecnc',
+            'date_publication_resultats', 'date_debut_cours', 'duree_formation',
+            'diplome_delivre', 'contact_email', 'contact_telephone', 'lieu_examen',
+            'description_concours', 'informations_complementaires'
+        ]);
         const fieldsToUpdate = {};
         for (const key in concoursData) {
-            if (concoursData[key] !== undefined && key !== 'id') {
-                fieldsToUpdate[key] = concoursData[key];
+            if (allowedFields.has(key) && concoursData[key] !== undefined) {
+                fieldsToUpdate[key] = nullableFields.has(key) && concoursData[key] === ''
+                    ? null
+                    : jsonFields.has(key) && typeof concoursData[key] !== 'string'
+                    ? JSON.stringify(concoursData[key])
+                    : concoursData[key];
             }
         }
 

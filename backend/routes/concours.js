@@ -123,6 +123,25 @@ router.post('/', async (req, res) => {
     }
 });
 
+// PUT /api/concours/:id - Modifier un concours
+router.put('/:id', async (req, res) => {
+    try {
+        const existing = await Concours.findById(req.params.id);
+        if (!existing) {
+            return res.status(404).json({success: false, message: 'Concours non trouvé'});
+        }
+        const concours = await Concours.update(req.params.id, req.body);
+        res.json({success: true, data: concours, message: 'Concours modifié avec succès'});
+    } catch (error) {
+        console.error('Erreur lors de la modification du concours:', error);
+        res.status(400).json({
+            success: false,
+            message: 'Erreur lors de la modification du concours',
+            errors: [error.message]
+        });
+    }
+});
+
 
 router.get('/etablissement/:etablissementId', authenticateAdmin, async (req, res) => {
     try {

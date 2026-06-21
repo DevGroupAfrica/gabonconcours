@@ -167,10 +167,11 @@ class ParticipationService {
             // Vérifier si tous les documents sont validés
             const [documents] = await connection.execute(`
                 SELECT COUNT(*) as total, 
-                       SUM(CASE WHEN statut = 'valide' THEN 1 ELSE 0 END) as valides
-                FROM candidat_documents
-                WHERE candidat_id = ?
-            `, [candidatId]);
+                       SUM(CASE WHEN d.statut = 'valide' THEN 1 ELSE 0 END) as valides
+                FROM dossiers dos
+                INNER JOIN documents d ON d.id = dos.document_id
+                WHERE dos.candidat_id = ? AND dos.concours_id = ?
+            `, [candidatId, concoursId]);
             
             const allDocsValid = documents[0].total > 0 && 
                                  documents[0].total === documents[0].valides;

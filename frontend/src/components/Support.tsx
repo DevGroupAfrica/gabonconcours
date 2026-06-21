@@ -5,6 +5,7 @@ import {useNavigate} from 'react-router-dom';
 import Layout from '@/components/Layout';
 import {Card, CardContent, Input} from "@mui/material";
 import axios from 'axios';
+import {toast} from '@/hooks/use-toast';
 
 const Support = () => {
     const navigate = useNavigate();
@@ -36,7 +37,10 @@ const Support = () => {
     headers: { 'Content-Type': 'application/json' }
 });
             if (response.status === 201) {
-                alert('Merci pour votre message ! Nous vous répondrons bientôt.');
+                toast({
+                    title: 'Message envoyé',
+                    description: 'Merci pour votre message. Notre équipe vous répondra bientôt.',
+                });
                 setFormData({name: '', email: '', message: ''}); // Reset form
             }
         } catch (err) {

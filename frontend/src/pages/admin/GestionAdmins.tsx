@@ -23,8 +23,10 @@ import {
 import {toast} from '@/hooks/use-toast';
 import {adminApiService} from '@/services/adminApi';
 import {apiService} from '@/services/api';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 const GestionAdmins = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [selectedAdmin, setSelectedAdmin] = useState<any>(null);
@@ -374,10 +376,12 @@ const GestionAdmins = () => {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => {
-                                                            if (confirm('Êtes-vous sûr de vouloir supprimer cet admin ?')) {
-                                                                deleteAdminMutation.mutate(admin.id);
-                                                            }
+                                                        onClick={async () => {
+                                                            if (!await confirm({
+                                                                title: 'Supprimer cet administrateur ?',
+                                                                description: `L’accès de ${admin.prenom} ${admin.nom} sera immédiatement révoqué.`,
+                                                            })) return;
+                                                            deleteAdminMutation.mutate(admin.id);
                                                         }}
                                                         className="text-red-600 hover:text-red-700"
                                                     >
@@ -528,6 +532,7 @@ const GestionAdmins = () => {
                     )}
                 </DialogContent>
             </Dialog>
+            <ConfirmationDialog/>
         </div>
     );
 };

@@ -32,10 +32,10 @@ router.put('/:id', async (req, res) => {
 
     // Récupérer le document avec les infos du candidat
     const [documentRows] = await connection.execute(`
-      SELECT d.*, c.nomcan, c.prncan, c.maican, c.nipcan, dos.nupcan
+      SELECT d.*, c.nomcan, c.prncan, c.maican, dos.nupcan
       FROM documents d
       LEFT JOIN dossiers dos ON dos.document_id = d.id
-      LEFT JOIN candidats c ON c.nupcan = dos.nupcan
+      LEFT JOIN candidats c ON c.id = dos.candidat_id
       WHERE d.id = ?
       LIMIT 1
     `, [id]);
@@ -50,12 +50,36 @@ router.put('/:id', async (req, res) => {
     const document = documentRows[0];
     console.log('Document trouvé:', document);
 
-    // Mettre à jour le statut du document
-    const [updateResult] = await connection.execute(`
-      UPDATE documents 
-      SET statut = ?, commentaire_validation = ?, validated_by = ?, validated_at = NOW(), updated_at = NOW()
-      WHERE id = ?
-    `, [statut, commentaire?.trim() || null, admin_id || null, id]);
+    const [documentColumns] = await connection.execute(`
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'documents'
+    `);
+    const existingColumns = new Set(documentColumns.map((column) => column.COLUMN_NAME));
+    const updateFields = ['statut = ?'];
+    const updateValues = [statut];
+
+    if (existingColumns.has('commentaire_validation')) {
+      updateFields.push('commentaire_validation = ?');
+      updateValues.push(commentaire?.trim() || null);
+    }
+    if (existingColumns.has('validated_by')) {
+      updateFields.push('validated_by = ?');
+      updateValues.push(admin_id || null);
+    }
+    if (existingColumns.has('validated_at')) {
+      updateFields.push('validated_at = NOW()');
+    }
+    if (existingColumns.has('updated_at')) {
+      updateFields.push('updated_at = NOW()');
+    }
+
+    // Mettre à jour le statut du document avec les colonnes disponibles en base
+    const [updateResult] = await connection.execute(
+      `UPDATE documents SET ${updateFields.join(', ')} WHERE id = ?`,
+      [...updateValues, id]
+    );
 
     if (updateResult.affectedRows === 0) {
       return res.status(404).json({

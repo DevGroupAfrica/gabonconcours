@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1:3306
--- Généré le : dim. 22 fév. 2026 à 18:05
+-- Mis à jour le : 15 juin 2026
 -- Version du serveur : 9.1.0
 -- Version de PHP : 8.3.14
 
@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS `dossiers` (
   `concours_id` int DEFAULT NULL,
   `document_id` int DEFAULT NULL,
   `nipcan` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `nupcan` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `docdsr` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -418,6 +419,7 @@ CREATE TABLE IF NOT EXISTS `dossiers` (
   KEY `document_id` (`document_id`),
   KEY `idx_candidat_id` (`candidat_id`),
   KEY `idx_nipcan` (`nipcan`),
+  KEY `idx_dossiers_nupcan` (`nupcan`),
   KEY `candidature_id_dossier` (`candidature_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -191,12 +191,15 @@ router.get('/nipcan/:nipcan/dashboard', async (req, res) => {
                     console.error('Erreur récupération notes:', notesError.message);
                 }
 
+            const documentsTotal = Number(documents.total) || 0;
+            const documentsValides = Number(documents.valides) || 0;
+
             // La publication des résultats est une phase ultérieure et ne doit pas
             // empêcher un dossier entièrement déposé et payé d'atteindre 100 %.
             const paiementRequis = Number(cand.fracnc || 0) > 0;
             const etapes = {
                 inscription: true, // Toujours vrai si la candidature existe
-                documents: documents.total > 0 && documents.valides === documents.total && documents.total > 0,
+                documents: documentsTotal > 0 && documentsValides === documentsTotal,
                 paiement: !paiementRequis || Boolean(paiement && paiement.statut === 'valide'),
                 resultats: hasNotes
             };
@@ -227,8 +230,8 @@ router.get('/nipcan/:nipcan/dashboard', async (req, res) => {
                 statut,
                 progression,
                 etapes,
-                documents_count: parseInt(documents.total) || 0,
-                documents_valides: parseInt(documents.valides) || 0,
+                documents_count: documentsTotal,
+                documents_valides: documentsValides,
                 paiement_statut: paiement ? paiement.statut : null,
                 created_at: cand.created_at
             };

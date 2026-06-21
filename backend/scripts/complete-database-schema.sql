@@ -83,6 +83,23 @@ CREATE TABLE IF NOT EXISTS `concours` (
   `fincnc` DATE,
   `stacnc` VARCHAR(1) DEFAULT '1',
   `etddos` VARCHAR(1) DEFAULT '0',
+  `is_gorri` TINYINT(1) DEFAULT 0,
+  `type_concours` VARCHAR(50) DEFAULT 'autre',
+  `description_concours` TEXT,
+  `nombre_places_total` INT DEFAULT 0,
+  `duree_formation` VARCHAR(100),
+  `diplome_delivre` VARCHAR(255),
+  `date_publication_resultats` DATE,
+  `date_debut_cours` DATE,
+  `series_bac_acceptees` JSON,
+  `documents_requis` JSON COMMENT 'Documents autorisés: [{nom, obligatoire, description}]',
+  `criteres_selection` JSON,
+  `modalites_inscription` JSON,
+  `conditions_eligibilite` JSON,
+  `contact_email` VARCHAR(255),
+  `contact_telephone` VARCHAR(30),
+  `lieu_examen` VARCHAR(255),
+  `informations_complementaires` TEXT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`etablissement_id`) REFERENCES `etablissements`(`id`) ON DELETE SET NULL,
@@ -181,6 +198,7 @@ CREATE TABLE IF NOT EXISTS `documents` (
   `chemin_fichier` VARCHAR(500),
   `statut` ENUM('en_attente', 'valide', 'rejete') DEFAULT 'en_attente',
   `commentaire` TEXT,
+  `commentaire_validation` TEXT,
   `validated_by` INT,
   `validated_at` TIMESTAMP NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -198,6 +216,7 @@ CREATE TABLE IF NOT EXISTS `dossiers` (
   `concours_id` INT,
   `document_id` INT,
   `nipcan` VARCHAR(50),
+  `nupcan` VARCHAR(100),
   `docdsr` VARCHAR(255),
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -205,7 +224,8 @@ CREATE TABLE IF NOT EXISTS `dossiers` (
   FOREIGN KEY (`concours_id`) REFERENCES `concours`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`) ON DELETE CASCADE,
   INDEX `idx_candidat_id` (`candidat_id`),
-  INDEX `idx_nipcan` (`nipcan`)
+  INDEX `idx_nipcan` (`nipcan`),
+  INDEX `idx_nupcan_dossier` (`nupcan`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ======================================
@@ -325,8 +345,10 @@ CREATE TABLE IF NOT EXISTS `messages` (
   `admin_id` INT NULL,
   `sujet` VARCHAR(255) NOT NULL,
   `message` TEXT NOT NULL,
+  `pieces_jointes` JSON NULL,
   `expediteur` ENUM('candidat', 'admin') NOT NULL,
   `statut` ENUM('non_lu', 'lu') DEFAULT 'non_lu',
+  `parent_message_id` INT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`candidat_nupcan`) REFERENCES `candidats`(`nupcan`) ON DELETE CASCADE,
@@ -374,7 +396,7 @@ INSERT IGNORE INTO `niveaux` (`nomniv`, `description`) VALUES
 
 -- Insertion des filières
 INSERT IGNORE INTO `filieres` (`nomfil`, `description`, `niveau_id`) VALUES 
-('Informatique', 'Sciences de l\'informatique et du numérique', 1),
+('Informatique', 'Sciences de informatique et du numérique', 1),
 ('Mathématiques', 'Mathématiques pures et appliquées', 1),
 ('Physique', 'Sciences physiques et applications', 1),
 ('Biologie', 'Sciences de la vie et de la terre', 1),
@@ -400,37 +422,6 @@ INSERT IGNORE INTO `matieres` (`nom_matiere`, `coefficient`, `duree`, `descripti
 ('Philosophie', 2.0, 2, 'Philosophie générale'),
 ('Sciences Naturelles', 3.0, 3, 'Sciences de la nature');
 
--- Insertion des concours
-INSERT IGNORE INTO `concours` (`etablissement_id`, `niveau_id`, `libcnc`, `fracnc`, `agecnc`, `sescnc`, `debcnc`, `fincnc`, `stacnc`) VALUES 
-(1, 1, 'Concours d\'entrée en Licence 1 - Sciences', 50000, 25, '2024-2025', '2024-01-01', '2024-12-31', '1'),
-(1, 4, 'Concours d\'entrée en Master - Informatique', 75000, 30, '2024-2025', '2024-01-01', '2024-12-31', '1'),
-(2, 1, 'Concours USTM - Formation Technique', 60000, 28, '2024-2025', '2024-01-01', '2024-12-31', '1'),
-(3, 1, 'Concours École Normale Supérieure', 45000, 26, '2024-2025', '2024-01-01', '2024-12-31', '1'),
-(4, 10, 'Concours BTS - Institut Technologique', 40000, 22, '2024-2025', '2024-01-01', '2024-12-31', '1');
-
--- Insertion des relations concours-filières
-INSERT IGNORE INTO `concours_filieres` (`concours_id`, `filiere_id`, `places_disponibles`) VALUES 
-(1, 1, 50), (1, 2, 30), (1, 3, 40), (1, 4, 35),
-(2, 1, 25),
-(3, 1, 20), (3, 5, 25), (3, 9, 15),
-(4, 7, 30), (4, 8, 25), (4, 6, 20),
-(5, 1, 30), (5, 5, 25), (5, 6, 20);
-
--- Insertion des relations filière-matières
-INSERT IGNORE INTO `filiere_matieres` (`filiere_id`, `matiere_id`, `coefficient`, `obligatoire`) VALUES 
--- Informatique
-(1, 1, 4.0, TRUE), (1, 2, 3.0, TRUE), (1, 9, 4.0, TRUE), (1, 4, 2.0, TRUE), (1, 5, 2.0, FALSE),
--- Mathématiques  
-(2, 1, 5.0, TRUE), (2, 2, 4.0, TRUE), (2, 3, 2.0, FALSE), (2, 4, 2.0, TRUE),
--- Physique
-(3, 1, 4.0, TRUE), (3, 2, 5.0, TRUE), (3, 3, 3.0, TRUE), (3, 4, 2.0, TRUE),
--- Biologie
-(4, 1, 3.0, TRUE), (4, 3, 3.0, TRUE), (4, 8, 4.0, TRUE), (4, 12, 3.0, TRUE), (4, 4, 2.0, TRUE);
-
--- Création du super admin par défaut
-INSERT IGNORE INTO `administrateurs` (`nom`, `prenom`, `email`, `password`, `role`, `statut`) VALUES 
-('Super', 'Admin', 'superadmin@gabconcours.ga', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'super_admin', 'actif');
-
 -- ======================================
 -- INDEX SUPPLÉMENTAIRES POUR PERFORMANCE
 -- ======================================
@@ -447,7 +438,7 @@ CREATE INDEX IF NOT EXISTS `idx_notifications_date` ON `notifications` (`candida
 
 -- Vue pour les candidatures complètes
 CREATE OR REPLACE VIEW `vue_candidatures_completes` AS
-SELECT 
+SELECT
     c.id,
     c.nupcan,
     c.nomcan,
@@ -472,7 +463,7 @@ LEFT JOIN niveaux n ON c.niveau_id = n.id;
 
 -- Vue pour les statistiques par établissement
 CREATE OR REPLACE VIEW `vue_stats_etablissements` AS
-SELECT 
+SELECT
     e.id,
     e.nomets,
     COUNT(DISTINCT co.id) as nb_concours,

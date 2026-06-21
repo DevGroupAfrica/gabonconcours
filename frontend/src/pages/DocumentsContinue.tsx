@@ -13,6 +13,7 @@ import {routeManager} from '@/services/routeManager';
 import {apiService} from '@/services/api';
 import {toast} from '@/hooks/use-toast';
 import {DocumentOption} from '@/types/entities';
+import {documentService} from '@/services/documentService';
 
 const DocumentsContinue = () => {
     const {nupcan} = useParams<{ nupcan: string }>();
@@ -24,13 +25,17 @@ const DocumentsContinue = () => {
 
     const decodedNupcan = decodeURIComponent(nupcan || '');
 
-    const documentOptions: DocumentOption[] = [
-        {value: 'cni', label: 'Carte Nationale d\'Identité', required: true},
-        {value: 'diplome', label: 'Diplôme ou Attestation', required: true},
-        {value: 'photo', label: 'Photo d\'identité', required: true},
-        {value: 'acte_naissance', label: 'Acte de naissance', required: true},
-        {value: 'autres', label: 'Autres documents', required: false},
-    ];
+    const {data: requiredDocuments = [], isLoading: requiredLoading} = useQuery({
+        queryKey: ['required-documents', decodedNupcan],
+        queryFn: () => documentService.getRequiredDocuments(decodedNupcan),
+        enabled: !!decodedNupcan,
+    });
+    const documentOptions: DocumentOption[] = requiredDocuments.map(document => ({
+        value: document.nom,
+        label: document.nom,
+        required: document.obligatoire,
+        description: document.description || '',
+    }));
 
     // Vérifier si des documents existent déjà
     const {data: existingDocuments, isLoading: documentsLoading} = useQuery({
@@ -79,6 +84,7 @@ const DocumentsContinue = () => {
             Object.entries(files).forEach(([type, file]) => {
                 formData.append('documents', file, `${type}_${file.name}`);
             });
+            formData.append('document_names', JSON.stringify(Object.keys(files)));
             return apiService.createDossier(formData);
         },
         onSuccess: (response) => {
@@ -172,9 +178,11 @@ const DocumentsContinue = () => {
         opt => !uploadedDocuments[opt.value],
     );
 
-    const requiredDocuments = documentOptions.filter(opt => opt.required);
-    const uploadedRequiredCount = requiredDocuments.filter(doc => uploadedDocuments[doc.value]).length;
-    const completionPercentage = Math.round((uploadedRequiredCount / requiredDocuments.length) * 100);
+    const mandatoryDocuments = documentOptions.filter(opt => opt.required);
+    const uploadedRequiredCount = mandatoryDocuments.filter(doc => uploadedDocuments[doc.value]).length;
+    const completionPercentage = mandatoryDocuments.length
+        ? Math.round((uploadedRequiredCount / mandatoryDocuments.length) * 100)
+        : 0;
 
     const handleRetourStatut = () => {
         const statutUrl = routeManager.getStatutUrl(decodedNupcan);
@@ -220,7 +228,7 @@ const DocumentsContinue = () => {
         });
     };
 
-    if (isLoading || documentsLoading) {
+    if (isLoading || documentsLoading || requiredLoading) {
         return (
             <Layout>
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

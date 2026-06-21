@@ -26,7 +26,22 @@ export interface DocumentData {
   created_at?: string;
 }
 
+export interface RequiredDocument {
+  nom: string;
+  obligatoire: boolean;
+  description?: string;
+}
+
 export const documentService = {
+  async getRequiredDocuments(nupcan: string): Promise<RequiredDocument[]> {
+    try {
+      const response = await api.get(`/documents/candidate/required/${encodeURIComponent(nupcan)}`);
+      return response.data.data?.documents || [];
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Impossible de charger les documents requis.');
+    }
+  },
+
   async getDocumentsByNupcan(nupcan: string): Promise<Document[]> {
     try {
       const response = await api.get(`/candidats/nupcan/${encodeURIComponent(nupcan)}/documents`);

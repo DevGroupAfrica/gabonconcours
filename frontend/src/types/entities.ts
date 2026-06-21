@@ -54,6 +54,7 @@ export interface Etablissement {
 }
 
 export interface Concours {
+    type_concours: string;
     id: number;
     etablissement_id: number;
     etablissement_nomets: string;

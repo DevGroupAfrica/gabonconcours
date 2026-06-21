@@ -6,6 +6,10 @@ const fs = require('fs');
 const { getConnection } = require('../config/database');
 const Document = require('../models/Document');
 const { sendEmail } = require('../services/emailService');
+const {
+    getRequiredDocumentsForNupcan,
+    isDocumentAllowed,
+} = require('../services/requiredDocumentsService');
 
 // Configuration du stockage
 const storage = multer.diskStorage({
@@ -37,6 +41,19 @@ const upload = multer({
         } else {
             cb(new Error('Seuls les fichiers PDF, JPG, JPEG et PNG sont acceptés'));
         }
+    }
+});
+
+router.get('/required/:nupcan', async (req, res) => {
+    try {
+        const configuration = await getRequiredDocumentsForNupcan(decodeURIComponent(req.params.nupcan));
+        if (!configuration) {
+            return res.status(404).json({success: false, message: 'Candidature introuvable'});
+        }
+        res.json({success: true, data: configuration});
+    } catch (error) {
+        console.error('Erreur récupération documents requis:', error);
+        res.status(500).json({success: false, message: 'Impossible de charger les documents requis'});
     }
 });
 
@@ -160,13 +177,13 @@ router.post('/add', upload.single('file'), async (req, res) => {
 
         const candidat = candidats[0];
 
-        // 🔹 Vérifier le nombre de documents existants (max 6)
-        const canAdd = await Document.canAddDocument(nupcan);
-        if (!canAdd) {
+        const configuration = await getRequiredDocumentsForNupcan(nupcan);
+        const requiredDocuments = configuration?.documents || [];
+        if (!isDocumentAllowed(nomdoc, requiredDocuments)) {
             if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
             return res.status(400).json({
                 success: false,
-                message: 'Nombre maximum de documents atteint (6)',
+                message: `Le document "${nomdoc}" n'est pas requis pour ce concours`,
             });
         }
 

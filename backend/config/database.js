@@ -2,12 +2,23 @@ const mysql = require('mysql2/promise');
 const {createPool} = require("mysql2");
 require('dotenv').config();
 
+const databaseUrl = process.env.DATABASE_URL
+    ? new URL(process.env.DATABASE_URL)
+    : null;
+
 const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || process.env.DB_USERNAME || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || process.env.DB_DATABASE || 'gabconcours',
-    port: Number(process.env.DB_PORT || 3306),
+    host: databaseUrl?.hostname || process.env.DB_HOST || 'localhost',
+    user: databaseUrl
+        ? decodeURIComponent(databaseUrl.username)
+        : process.env.DB_USER || process.env.DB_USERNAME || 'root',
+    password: databaseUrl
+        ? decodeURIComponent(databaseUrl.password)
+        : process.env.DB_PASSWORD || '',
+    database: databaseUrl?.pathname.replace(/^\//, '')
+        || process.env.DB_NAME
+        || process.env.DB_DATABASE
+        || 'gabconcours',
+    port: Number(databaseUrl?.port || process.env.DB_PORT || 3306),
     charset: 'utf8mb4',
     timezone: '+00:00',
     connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT || 15000),

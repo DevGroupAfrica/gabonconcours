@@ -14,8 +14,10 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Plus, Trash2, Save, BookMarked, GraduationCap } from 'lucide-react';
 import { apiService } from '@/services/api';
+import {useConfirmation} from '@/hooks/use-confirmation';
 
 const FiliereMatieresManagement = () => {
+    const {confirm, ConfirmationDialog} = useConfirmation();
     const [filieres, setFilieres] = useState<any[]>([]);
     const [matieres, setMatieres] = useState<any[]>([]);
     const [selectedFiliere, setSelectedFiliere] = useState('');
@@ -171,7 +173,10 @@ const FiliereMatieresManagement = () => {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette association ?')) return;
+        if (!await confirm({
+            title: 'Supprimer cette association ?',
+            description: 'La matière sera retirée de cette filière.',
+        })) return;
 
         try {
             const response = await apiService.makeRequest(`/filiere-matieres/${id}`, 'DELETE');
@@ -332,6 +337,7 @@ const FiliereMatieresManagement = () => {
                     )}
                 </CardContent>
             </Card>
+            <ConfirmationDialog/>
         </div>
     );
 };

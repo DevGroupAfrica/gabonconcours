@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, BookOpen, TrendingUp, Calendar, Filter } from 'lucide-react';
+import { Users, Building, BookOpen, TrendingUp, Filter } from 'lucide-react';
 import { apiService } from '@/services/api';
 import ErrorMessage from '@/components/ErrorMessage';
 
@@ -53,7 +53,7 @@ const StatistiquesPage = () => {
         }
     });
 
-    const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--secondary))', 'hsl(var(--destructive))'];
+    const COLORS = ['#2A6DF3', '#5d87e8', '#89a7e8', '#b8c8eb'];
 
     if (error) {
         return <ErrorMessage message="Impossible de charger les statistiques" onRetry={refetch} />;
@@ -64,44 +64,41 @@ const StatistiquesPage = () => {
             title: "Total Candidats",
             value: stats?.total_candidats || 0,
             icon: Users,
-            color: "text-blue-600"
         },
         {
             title: "Établissements",
             value: stats?.total_etablissements || 0,
             icon: Building,
-            color: "text-green-600"
         },
         {
             title: "Concours Actifs",
             value: stats?.concours_actifs || 0,
             icon: BookOpen,
-            color: "text-purple-600"
         },
         {
             title: "Taux de Réussite",
             value: `${stats?.taux_reussite || 0}%`,
             icon: TrendingUp,
-            color: "text-orange-600"
         }
     ];
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="space-y-5">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">Statistiques Globales</h1>
-                    <p className="text-muted-foreground">Vue d'ensemble des performances de la plateforme</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#2A6DF3]">Analyse globale</p>
+                    <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Statistiques de la plateforme</h1>
+                    <p className="mt-1 text-sm text-slate-500">Suivez les inscriptions, concours et établissements.</p>
                 </div>
             </div>
 
             {/* Filtres */}
-            <Card className="animate-fade-in">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Filter className="h-5 w-5" />
-                        Filtres Avancés
+            <Card className="rounded-md border-slate-200 shadow-none">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Filter className="h-4 w-4 text-[#2A6DF3]" />
+                        Filtres
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -165,14 +162,13 @@ const StatistiquesPage = () => {
             </Card>
 
             {/* Cards de stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 {statsCards.map((card, index) => {
                     const Icon = card.icon;
                     return (
-                        <Card 
+                        <Card
                             key={index}
-                            className="hover-scale animate-fade-in"
-                            style={{ animationDelay: `${index * 0.1}s` }}
+                            className="rounded-md border-slate-200 shadow-none"
                         >
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between">
@@ -180,7 +176,7 @@ const StatistiquesPage = () => {
                                         <p className="text-sm text-muted-foreground">{card.title}</p>
                                         <p className="text-3xl font-bold">{card.value}</p>
                                     </div>
-                                    <Icon className={`h-12 w-12 ${card.color}`} />
+                                    <span className="flex h-11 w-11 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><Icon className="h-5 w-5"/></span>
                                 </div>
                             </CardContent>
                         </Card>
@@ -189,16 +185,16 @@ const StatistiquesPage = () => {
             </div>
 
             {/* Graphiques */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                 {/* Évolution des inscriptions */}
-                <Card className="animate-fade-in">
+                <Card className="rounded-md border-slate-200 shadow-none">
                     <CardHeader>
                         <CardTitle>Évolution des Inscriptions</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={stats?.evolution_inscriptions || []}>
-                                <CartesianGrid strokeDasharray="3 3" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                                 <XAxis dataKey="date" />
                                 <YAxis />
                                 <Tooltip />
@@ -210,14 +206,14 @@ const StatistiquesPage = () => {
                 </Card>
 
                 {/* Répartition par établissement */}
-                <Card className="animate-fade-in">
+                <Card className="rounded-md border-slate-200 shadow-none">
                     <CardHeader>
                         <CardTitle>Répartition par Établissement</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={stats?.repartition_etablissements || []}>
-                                <CartesianGrid strokeDasharray="3 3" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                                 <XAxis dataKey="nom" />
                                 <YAxis />
                                 <Tooltip />
@@ -229,7 +225,7 @@ const StatistiquesPage = () => {
                 </Card>
 
                 {/* Statut des candidatures */}
-                <Card className="animate-fade-in">
+                <Card className="rounded-md border-slate-200 shadow-none">
                     <CardHeader>
                         <CardTitle>Statut des Candidatures</CardTitle>
                     </CardHeader>
@@ -257,19 +253,19 @@ const StatistiquesPage = () => {
                 </Card>
 
                 {/* Répartition par filière */}
-                <Card className="animate-fade-in">
+                <Card className="rounded-md border-slate-200 shadow-none">
                     <CardHeader>
                         <CardTitle>Répartition par Filière</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={stats?.repartition_filieres || []}>
-                                <CartesianGrid strokeDasharray="3 3" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                                 <XAxis dataKey="nom" />
                                 <YAxis />
                                 <Tooltip />
                                 <Legend />
-                                <Bar dataKey="candidats" fill="hsl(var(--accent))" />
+                                <Bar dataKey="candidats" fill="#2A6DF3" />
                             </BarChart>
                         </ResponsiveContainer>
                     </CardContent>

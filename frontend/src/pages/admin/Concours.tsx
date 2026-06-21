@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/dialog"
 import {Badge} from "@/components/ui/badge";
 import {CheckCircle, XCircle, Loader2} from 'lucide-react';
+import {Eye, Pencil} from 'lucide-react';
+import {Link} from 'react-router-dom';
 
 const Concours = () => {
     const [open, setOpen] = useState(false)
@@ -140,7 +142,9 @@ const Concours = () => {
                                         <TableRow key={concoursItem.id}>
                                             <TableCell className="font-medium">{concoursItem.id}</TableCell>
                                             <TableCell>
-                                                <p className="font-semibold">{concoursItem.libcnc}</p>
+                                                <Link to={`/admin/concour/${concoursItem.id}`} className="font-semibold text-primary hover:underline">
+                                                    {concoursItem.libcnc}
+                                                </Link>
                                                 <Badge variant="outline" className="mt-1">{concoursItem.sescnc}</Badge>
                                             </TableCell>
                                             <TableCell>
@@ -170,15 +174,22 @@ const Concours = () => {
                                             </TableCell>
 
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    onClick={() => deleteMutation.mutate(concoursItem.id)}
-                                                    disabled={deleteMutation.isPending}
-                                                >
-                                                    {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                                    Supprimer
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button asChild variant="outline" size="sm">
+                                                        <Link to={`/admin/concour/${concoursItem.id}`}>
+                                                            <Eye className="mr-1 h-4 w-4"/><Pencil className="mr-1 h-3 w-3"/>Voir / Modifier
+                                                        </Link>
+                                                    </Button>
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => deleteMutation.mutate(concoursItem.id)}
+                                                        disabled={deleteMutation.isPending}
+                                                    >
+                                                        {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                                        Supprimer
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))

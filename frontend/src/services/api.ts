@@ -6,6 +6,7 @@ export interface ApiResponse<T> {
     success: boolean;
     data?: T;
     message?: string;
+    code?: string;
     errors?: string[];
 }
 
@@ -61,6 +62,7 @@ export class ApiService {
     async makeRequest<T>(url: string, method: string, data?: any): Promise<ApiResponse<T>> {
         try {
             const isFormData = data instanceof FormData;
+            const storedToken = this.token || localStorage.getItem('adminToken') || localStorage.getItem('token');
 
             const response = await axios({
                 url: `${this.baseUrl}${url}`,
@@ -70,7 +72,7 @@ export class ApiService {
                     ? {'Content-Type': 'multipart/form-data'}
                     : {
                         'Content-Type': 'application/json',
-                        ...(this.token ? {Authorization: `Bearer ${this.token}`} : {}),
+                        ...(storedToken ? {Authorization: `Bearer ${storedToken}`} : {}),
                     },
             });
 
@@ -82,6 +84,7 @@ export class ApiService {
                 return {
                     success: false,
                     message: error.response.data.message || 'Erreur lors de la requête',
+                    code: error.response.data.code,
                     errors: error.response.data.errors || [error.message],
                 };
             }
@@ -97,6 +100,7 @@ export class ApiService {
     async makeFormDataRequest<T>(url: string, method: string, formData: FormData): Promise<ApiResponse<T>> {
         try {
             console.log('API: Envoi FormData vers', url);
+            const storedToken = this.token || localStorage.getItem('adminToken') || localStorage.getItem('token');
 
             const response = await axios({
                 url: `${this.baseUrl}${url}`,
@@ -104,7 +108,7 @@ export class ApiService {
                 data: formData,
                 headers: {
                     'Content-Type': 'multipart/form-data',
-                    ...(this.token ? {Authorization: `Bearer ${this.token}`} : {}),
+                    ...(storedToken ? {Authorization: `Bearer ${storedToken}`} : {}),
                 },
             });
 
@@ -268,6 +272,10 @@ export class ApiService {
 
     async createConcours<T>(data: any): Promise<ApiResponse<T>> {
         return this.makeRequest<T>('/concours', 'POST', data);
+    }
+
+    async updateConcours<T>(id: string, data: any): Promise<ApiResponse<T>> {
+        return this.makeRequest<T>(`/concours/${id}`, 'PUT', data);
     }
 
     async deleteConcours<T>(id: string): Promise<ApiResponse<T>> {

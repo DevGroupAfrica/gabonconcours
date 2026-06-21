@@ -8,6 +8,10 @@ const Dossier = require('../models/Dossier');
 const Candidat = require('../models/Candidat');
 const {unlinkSync, existsSync, renameSync} = require("node:fs");
 const { type } = require('node:os');
+const {
+    getRequiredDocumentsForConcours,
+    isDocumentAllowed,
+} = require('../services/requiredDocumentsService');
 
 // Configuration multer pour l'upload de documents
 const storage = multer.diskStorage({
@@ -23,7 +27,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage: storage,
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png', '.sql'];
+        const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
         const fileExt = path.extname(file.originalname).toLowerCase();
         if (allowedTypes.includes(fileExt)) {
             cb(null, true);
@@ -210,6 +214,13 @@ router.post('/', (req, res) => {
             }
             console.log('✅ Candidat trouvé - ID:', candidat.id);
             const candidat_id = candidat.id;
+            if (Number(candidat.concours_id) !== Number(concours_id)) {
+                req.files?.forEach(file => existsSync(file.path) && unlinkSync(file.path));
+                return res.status(400).json({
+                    success: false,
+                    message: 'Ce concours ne correspond pas à la candidature'
+                });
+            }
 
             // Vérifier si des fichiers ont été uploadés
             if (!req.files || req.files.length === 0) {
@@ -223,13 +234,46 @@ router.post('/', (req, res) => {
 
             console.log('📄 Traitement de', req.files.length, 'document(s)...');
 
+            let documentNames = [];
+            try {
+                documentNames = JSON.parse(req.body.document_names || '[]');
+            } catch {
+                documentNames = [];
+            }
+
+            if (documentNames.length !== req.files.length) {
+                req.files.forEach(file => existsSync(file.path) && unlinkSync(file.path));
+                return res.status(400).json({
+                    success: false,
+                    message: 'Les noms des documents envoyés sont invalides'
+                });
+            }
+
+            const requiredDocuments = await getRequiredDocumentsForConcours(candidat.concours_id);
+            const unauthorizedDocument = documentNames.find(name => !isDocumentAllowed(name, requiredDocuments));
+            if (unauthorizedDocument) {
+                req.files.forEach(file => existsSync(file.path) && unlinkSync(file.path));
+                return res.status(400).json({
+                    success: false,
+                    message: `Le document "${unauthorizedDocument}" n'est pas requis pour ce concours`
+                });
+            }
+            const normalizedNames = documentNames.map(name => name.trim().toLowerCase());
+            if (new Set(normalizedNames).size !== normalizedNames.length) {
+                req.files.forEach(file => existsSync(file.path) && unlinkSync(file.path));
+                return res.status(400).json({
+                    success: false,
+                    message: 'Un même document ne peut être téléversé qu’une seule fois'
+                });
+            }
+
             // Process each uploaded file
             const dossierPromises = req.files.map(async (file, index) => {
                 console.log(`  📄 Document ${index + 1}:`, file.originalname, '-', file.filename);
                 
                 // Créer d'abord le document
                 const documentData = {
-                    nomdoc: file.originalname,
+                    nomdoc: documentNames[index],
                     type: file.mimetype.includes('pdf') ? 'pdf' : 'image',
                     nom_fichier: file.filename,
                     statut: 'en_attente'
@@ -241,7 +285,7 @@ router.post('/', (req, res) => {
                 // Puis créer le dossier qui lie le document au candidat
                 const dossierData = {
                     candidat_id,
-                    concours_id: parseInt(concours_id),
+                    concours_id: candidat.concours_id,
                     document_id: document.id,
                     nupcan: nupcan,  // Utilise nupcan (numéro de candidature)
                     docdsr: file.path
@@ -294,23 +338,29 @@ router.post('/add-document', upload.single('file'), async (req, res) => {
             });
         }
 
-        // Vérifier le nombre de documents supplémentaires existants
-        const connection = require('../config/database').getConnection();
-        const [existingDocs] = await connection.execute(
-            `SELECT COUNT(*) as count FROM documents d 
-             INNER JOIN dossiers dos ON d.id = dos.document_id 
-             WHERE dos.nupcan = ? AND d.type = 'autre'`,
-            [nupcan]
-        );
-
-        if (existingDocs[0].count >= 3) {
-            // Supprimer le fichier uploadé
-            if (existsSync(req.file.path)) {
-                unlinkSync(req.file.path);
-            }
+        const requiredDocuments = await getRequiredDocumentsForConcours(candidat.concours_id);
+        if (!isDocumentAllowed(nomdoc, requiredDocuments)) {
+            if (existsSync(req.file.path)) unlinkSync(req.file.path);
             return res.status(400).json({
                 success: false,
-                message: 'Vous avez atteint la limite de 3 documents supplémentaires'
+                message: `Le document "${nomdoc}" n'est pas requis pour ce concours`
+            });
+        }
+
+        const connection = require('../config/database').getConnection();
+        const [existingDocs] = await connection.execute(
+            `SELECT d.id FROM documents d
+             INNER JOIN dossiers dos ON d.id = dos.document_id
+             WHERE dos.nupcan = ? AND LOWER(TRIM(d.nomdoc)) = LOWER(TRIM(?))
+             LIMIT 1`,
+            [nupcan, nomdoc]
+        );
+
+        if (existingDocs.length) {
+            if (existsSync(req.file.path)) unlinkSync(req.file.path);
+            return res.status(400).json({
+                success: false,
+                message: `Le document "${nomdoc}" existe déjà. Remplacez-le plutôt que de l'ajouter à nouveau.`
             });
         }
 

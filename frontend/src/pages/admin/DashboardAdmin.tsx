@@ -18,7 +18,10 @@ import {
     GraduationCap,
     Trophy,
     AlertCircle,
-    BookOpen
+    BookOpen,
+    ArrowRight,
+    CreditCard,
+    UserPlus
 } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { toast } from '@/hooks/use-toast';
@@ -73,6 +76,7 @@ interface DashboardStats {
         complets: number;
         en_attente: number;
         validation_admin: number;
+        valides?: number;
     };
     documents: {
         total: number;
@@ -122,15 +126,25 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
     const unreadCount = messages?.filter((m) => m.statut === 'non_lu' && m.expediteur === 'candidat').length || 0;
 
     
-    const { data: stats = defaultStats, isLoading: statsLoading } = useQuery<DashboardStats>({
-        queryKey: ['admin-stats'],
+    const { data: rawStats, isLoading: statsLoading } = useQuery<Partial<DashboardStats>>({
+        queryKey: ['admin-dashboard-stats'],
         queryFn: async () => {
-            const response = await apiService.getStatistics<DashboardStats>();
-            return response.data || defaultStats;
+            const response = await apiService.getStatistics<Partial<DashboardStats>>();
+            return response.data || {};
         },
         refetchInterval: 30000,
     });
 
+    const stats: DashboardStats = {
+        candidats: {
+            ...defaultStats.candidats,
+            ...(rawStats?.candidats || {}),
+            complets: rawStats?.candidats?.complets ?? rawStats?.candidats?.valides ?? 0,
+        },
+        documents: {...defaultStats.documents, ...(rawStats?.documents || {})},
+        paiements: {...defaultStats.paiements, ...(rawStats?.paiements || {})},
+        messages: {...defaultStats.messages, ...(rawStats?.messages || {})},
+    };
 
     const adminData = JSON.parse(localStorage.getItem('adminData') || '{}');
     const etablissementId = adminData.etablissement_id || 1;
@@ -196,6 +210,72 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
         }
     };
 
+    const quickActions = admin?.role === 'admin_etablissement'
+        ? [
+            {
+                title: 'Gérer les concours',
+                description: 'Consulter les concours et leurs candidatures',
+                icon: Trophy,
+                badge: `${concoursData?.length || 0} concours`,
+                action: () => navigate('/admin/concours'),
+            },
+            {
+                title: 'Voir les candidats',
+                description: 'Rechercher et suivre les dossiers candidats',
+                icon: Users,
+                badge: `${stats.candidats.total} candidat(s)`,
+                action: () => navigate('/admin/candidats'),
+            },
+            {
+                title: 'Valider les documents',
+                description: 'Traiter les pièces justificatives reçues',
+                icon: FileText,
+                badge: `${stats.documents.en_attente} en attente`,
+                action: () => navigate('/admin/dossiers'),
+            },
+            {
+                title: 'Contrôler les paiements',
+                description: 'Suivre les paiements et les validations',
+                icon: CreditCard,
+                badge: `${stats.paiements.en_attente} en attente`,
+                action: () => navigate('/admin/paiements'),
+            },
+            {
+                title: 'Répondre aux messages',
+                description: 'Échanger avec les candidats',
+                icon: MessageSquare,
+                badge: `${unreadCount} non lu(s)`,
+                action: () => navigate('/admin/messagerie'),
+            },
+            {
+                title: 'Gérer les sous-admins',
+                description: 'Organiser les accès de votre équipe',
+                icon: UserPlus,
+                badge: 'Équipe',
+                action: () => navigate('/admin/sous-admins'),
+            },
+        ]
+        : [
+            {
+                title: admin?.admin_role === 'documents' ? 'Valider les documents' : 'Saisir les notes',
+                description: admin?.admin_role === 'documents'
+                    ? 'Traiter les pièces justificatives reçues'
+                    : 'Gérer les notes des candidats',
+                icon: admin?.admin_role === 'documents' ? FileText : BookOpen,
+                badge: admin?.admin_role === 'documents'
+                    ? `${stats.documents.en_attente} en attente`
+                    : `${stats.candidats.complets} candidat(s)`,
+                action: () => navigate(admin?.admin_role === 'documents' ? '/admin/dossiers' : '/admin/notes'),
+            },
+            {
+                title: 'Voir les concours',
+                description: 'Accéder aux concours de l’établissement',
+                icon: Trophy,
+                badge: `${concoursData?.length || 0} concours`,
+                action: () => navigate('/admin/concours'),
+            },
+        ];
+
     if (statsLoading) {
         return (
             <AdminLayout>
@@ -208,18 +288,25 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
     return (
         
 
-            <div className="p-8">
-                <div className="mb-8">
-                    <h1 className="text-4xl font-bold mb-2">Tableau de Bord Administration</h1>
-                    <p className="text-muted-foreground">Gestion par concours
-                        - {adminData.etablissement_nom || 'École Normale Supérieure'}</p>
+            <div className="space-y-7">
+                <div className="relative overflow-hidden rounded-md border border-slate-200 bg-white px-7 py-8 sm:px-9">
+                    <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2A6DF3]">Espace administration</p>
+                            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.045em] text-slate-950 sm:text-4xl">Pilotez vos concours en un coup d'œil.</h1>
+                            <p className="mt-3 text-sm text-slate-500">{adminData.etablissement_nom || 'École Normale Supérieure'} · Données actualisées automatiquement</p>
+                        </div>
+                        <Button className="rounded-md bg-[#2A6DF3] hover:bg-[#205fdc]" onClick={() => setExportModalOpen(true)}>
+                            <Download className="h-4 w-4"/>Exporter les données
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Notifications / Alertes */}
                 <NotificationAlerts />
 
                 <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="grid h-auto w-full max-w-md grid-cols-2 rounded-xl border border-[#e1e6fa] bg-white p-1">
                         <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
                         <TabsTrigger value="concours">Concours</TabsTrigger>
                     
@@ -228,38 +315,38 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
 
                     <TabsContent value="overview" className="space-y-6">
                         {/* Statistiques globales */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <Card>
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+                            <Card className="rounded-md border-slate-200 shadow-none">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Total Candidats</CardTitle>
-                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><Users className="h-5 w-5"/></span>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold"> Total : {stats?.candidats?.total ?? 0}</div>
+                                    <div className="text-3xl font-semibold tracking-tight text-[#111c59]">{stats?.candidats?.total ?? 0}</div>
                                     <p className="text-xs text-muted-foreground">
                                         {stats?.candidats?.complets?? 0} dossiers complets
                                     </p>
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-md border-slate-200 shadow-none">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Documents</CardTitle>
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><FileText className="h-5 w-5"/></span>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{stats?.documents?.en_attente??0}</div>
+                                    <div className="text-3xl font-semibold tracking-tight text-[#111c59]">{stats?.documents?.en_attente??0}</div>
                                     <p className="text-xs text-muted-foreground">En attente de validation</p>
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-md border-slate-200 shadow-none">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Paiements</CardTitle>
-                                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><TrendingUp className="h-5 w-5"/></span>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">
+                                    <div className="text-2xl font-semibold tracking-tight text-[#111c59]">
                                         {stats?.paiements?.montant_total?.toLocaleString()?? 0} FCFA
                                     </div>
                                     <p className="text-xs text-muted-foreground">
@@ -268,10 +355,10 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-md border-slate-200 shadow-none">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Messages</CardTitle>
-                                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]"><MessageSquare className="h-5 w-5"/></span>
                                 </CardHeader>
                                 <CardContent>
                                     <Badge variant="destructive">{unreadCount} non lu(s)</Badge>
@@ -280,8 +367,45 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
                             </Card>
                         </div>
 
+                        <Card className="rounded-md border-slate-200 shadow-none">
+                            <CardHeader className="flex flex-row items-center justify-between gap-4">
+                                <div>
+                                    <CardTitle>Actions rapides</CardTitle>
+                                    <p className="mt-1 text-sm text-slate-500">Accédez directement aux tâches les plus fréquentes.</p>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => setExportModalOpen(true)}>
+                                    <Download className="mr-2 h-4 w-4"/>
+                                    Exporter
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {quickActions.map(action => (
+                                        <button
+                                            key={action.title}
+                                            type="button"
+                                            onClick={action.action}
+                                            className="group flex min-h-32 items-start gap-4 rounded-md border border-slate-200 p-4 text-left transition-all hover:border-[#2A6DF3] hover:bg-blue-50/40"
+                                        >
+                                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[#2A6DF3]">
+                                                <action.icon className="h-5 w-5"/>
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className="flex items-start justify-between gap-3">
+                                                    <span className="font-semibold text-slate-900">{action.title}</span>
+                                                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#2A6DF3]"/>
+                                                </span>
+                                                <span className="mt-1 block text-sm text-slate-500">{action.description}</span>
+                                                <Badge variant="secondary" className="mt-3 font-normal">{action.badge}</Badge>
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Concours actifs */}
-                        <Card>
+                        <Card className="rounded-md border-slate-200 shadow-none">
                             <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <CardTitle className="flex items-center gap-2">
@@ -307,7 +431,7 @@ const [exportModalOpen, setExportModalOpen] = useState(false);
                                         concoursData.map((concours: any) => (
                                             <Card
                                                 key={concours.id}
-                                                className="cursor-pointer hover:border-primary transition-colors"
+                                                className="cursor-pointer rounded-md border-slate-200 transition-colors hover:border-[#2A6DF3]"
                                                 onClick={() => setSelectedConcours(concours.id)}
                                             >
                                                 <CardHeader>

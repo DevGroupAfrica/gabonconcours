@@ -1,11 +1,19 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
+const databaseUrl = process.env.DATABASE_URL
+    ? new URL(process.env.DATABASE_URL)
+    : null;
+
 const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    port: process.env.DB_PORT || 3306,
+    host: databaseUrl?.hostname || process.env.DB_HOST || 'localhost',
+    user: databaseUrl
+        ? decodeURIComponent(databaseUrl.username)
+        : process.env.DB_USER || 'root',
+    password: databaseUrl
+        ? decodeURIComponent(databaseUrl.password)
+        : process.env.DB_PASSWORD || '',
+    port: Number(databaseUrl?.port || process.env.DB_PORT || 3306),
     charset: 'utf8mb4',
     timezone: '+00:00'
 };
@@ -17,7 +25,9 @@ async function initializeDatabase() {
         // Connexion sans spécifier de base de données
         connection = await mysql.createConnection(dbConfig);
 
-        const dbName = process.env.DB_NAME || 'gabconcoursv5';
+        const dbName = databaseUrl?.pathname.replace(/^\//, '')
+            || process.env.DB_NAME
+            || 'gabconcoursv5';
         console.log(`🔄 Initialisation de la base de données: ${dbName}`);
 
         // Créer la base de données si elle n'existe pas
