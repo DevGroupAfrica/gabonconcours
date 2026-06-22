@@ -1,8 +1,8 @@
 import axios from 'axios';
-import {ApiResponse} from "@/services/api.ts";
+import {API_BASE_URL, ApiResponse} from "@/services/api.ts";
 
-const BASE_URL = 'http://localhost:8002/api/admin';
-const BASE_URL2 = 'http://localhost:8002/api';
+const BASE_URL = `${API_BASE_URL}/admin`;
+const BASE_URL2 = API_BASE_URL;
 
  async function makeRequest<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', data?: any): Promise<ApiResponse<T>> {
     try {

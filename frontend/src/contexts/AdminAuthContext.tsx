@@ -24,7 +24,6 @@ interface AdminAuthContextType {
     isSuperAdmin: boolean;
 }
 
-const BASE_URL = 'http://localhost:8002/api/admin';
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
 export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -58,13 +57,8 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, [token]);
 
     const login = async (email: string, password: string): Promise<boolean> => {
-        const response = await fetch(`${BASE_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-        });
-
-        const data = await response.json();
+        const response = await api.post('/admin/auth/login', { email, password });
+        const data = response.data;
 
         if (data.success && data.data) {
             setAdmin(data.data.admin);

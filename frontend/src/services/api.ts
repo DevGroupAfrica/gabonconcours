@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002/api';
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export interface ApiResponse<T> {
     success: boolean;
