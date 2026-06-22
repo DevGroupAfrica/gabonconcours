@@ -1,24 +1,19 @@
 const cors = require('cors');
 
-const configuredOrigins = [
-    process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(',')
-]
-    .map(origin => origin && origin.trim().replace(/\/+$/, ''))
-    .filter(Boolean);
-
 const allowedOrigins = [
-    ...configuredOrigins,
+    process.env.FRONTEND_URL || 'http://localhost:8001',
     'http://localhost:8001',
     'http://127.0.0.1:8001',
-    'https://gabonconcours.devgroup.ga',
-    'https://gabonconcours.devgroupe.ga'
+    'https://gabonconcours.vercel.app',
+    "http://gabconcours.devgroup.ga", 
+    "https://gabconcours.devgroup.ga",
+    "http://api.gabconcours.devgroup.ga", 
+    "https://api.gabconcours.devgroup.ga"
 ];
 
 const corsOptions = {
     origin(origin, callback) {
-        const normalizedOrigin = origin && origin.replace(/\/+$/, '');
-        if (!normalizedOrigin || allowedOrigins.includes(normalizedOrigin)) {
+        if (!origin || allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
 

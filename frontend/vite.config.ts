@@ -12,8 +12,12 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8001,
+    allowedHosts: ["gabconcours.devgroup.ga"],
     hmr: {
       overlay: false,
+    },
+    cors: {
+      origin: ["http://gabconcours.devgroup.ga", "https://gabconcours.devgroup.ga","http://api.gabconcours.devgroup.ga", "https://api.gabconcours.devgroup.ga"],
     },
     proxy: {
       '/api': {
